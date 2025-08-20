@@ -11,6 +11,10 @@ class User < ApplicationRecord
   has_many :allergies, dependent: :destroy
   has_many :disliked_ingredients, dependent: :destroy
   has_many :health_goals, dependent: :destroy
+  has_many :meal_plans, dependent: :destroy
+  has_many :recipes, dependent: :destroy
+  has_many :ratings, dependent: :destroy
+  has_many :meal_logs, dependent: :destroy
 
   validates :email, presence: true, uniqueness: true
   validates :first_name, :last_name, :role, presence: true

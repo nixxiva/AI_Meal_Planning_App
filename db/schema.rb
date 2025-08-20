@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2025_08_18_120847) do
+ActiveRecord::Schema[7.2].define(version: 2025_08_20_081206) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -46,6 +46,80 @@ ActiveRecord::Schema[7.2].define(version: 2025_08_18_120847) do
     t.index ["user_id"], name: "index_health_goals_on_user_id"
   end
 
+  create_table "ingredients", force: :cascade do |t|
+    t.string "ingredient_name"
+    t.string "unit"
+    t.float "calories_per_unit"
+    t.float "protein_per_unit"
+    t.float "carbs_per_unit"
+    t.float "fat_per_unit"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "meal_logs", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "recipe_id", null: false
+    t.float "quantity"
+    t.date "date"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["recipe_id"], name: "index_meal_logs_on_recipe_id"
+    t.index ["user_id"], name: "index_meal_logs_on_user_id"
+  end
+
+  create_table "meal_plan_recipes", force: :cascade do |t|
+    t.bigint "meal_plan_id", null: false
+    t.bigint "recipe_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["meal_plan_id"], name: "index_meal_plan_recipes_on_meal_plan_id"
+    t.index ["recipe_id"], name: "index_meal_plan_recipes_on_recipe_id"
+  end
+
+  create_table "meal_plans", force: :cascade do |t|
+    t.date "start_date"
+    t.date "end_date"
+    t.bigint "user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_meal_plans_on_user_id"
+  end
+
+  create_table "ratings", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "recipe_id", null: false
+    t.integer "rating"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["recipe_id"], name: "index_ratings_on_recipe_id"
+    t.index ["user_id"], name: "index_ratings_on_user_id"
+  end
+
+  create_table "recipe_ingredients", force: :cascade do |t|
+    t.bigint "recipe_id", null: false
+    t.bigint "ingredient_id", null: false
+    t.string "quantity"
+    t.string "unit"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["ingredient_id"], name: "index_recipe_ingredients_on_ingredient_id"
+    t.index ["recipe_id"], name: "index_recipe_ingredients_on_recipe_id"
+  end
+
+  create_table "recipes", force: :cascade do |t|
+    t.string "title"
+    t.string "instructions"
+    t.float "calories"
+    t.float "protein"
+    t.float "carbs"
+    t.float "fat"
+    t.bigint "user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_recipes_on_user_id"
+  end
+
   create_table "users", force: :cascade do |t|
     t.string "email", default: "", null: false
     t.string "encrypted_password", default: "", null: false
@@ -72,4 +146,14 @@ ActiveRecord::Schema[7.2].define(version: 2025_08_18_120847) do
   add_foreign_key "dietary_preferences", "users"
   add_foreign_key "disliked_ingredients", "users"
   add_foreign_key "health_goals", "users"
+  add_foreign_key "meal_logs", "recipes"
+  add_foreign_key "meal_logs", "users"
+  add_foreign_key "meal_plan_recipes", "meal_plans"
+  add_foreign_key "meal_plan_recipes", "recipes"
+  add_foreign_key "meal_plans", "users"
+  add_foreign_key "ratings", "recipes"
+  add_foreign_key "ratings", "users"
+  add_foreign_key "recipe_ingredients", "ingredients"
+  add_foreign_key "recipe_ingredients", "recipes"
+  add_foreign_key "recipes", "users"
 end
