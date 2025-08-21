@@ -1,3 +1,5 @@
 class HealthGoal < ApplicationRecord
-  belongs_to :user
+  has_many :user
+
+  validates :goal_name, presence: true
 end

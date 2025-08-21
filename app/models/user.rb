@@ -10,12 +10,28 @@ class User < ApplicationRecord
   has_many :dietary_preferences, dependent: :destroy
   has_many :allergies, dependent: :destroy
   has_many :disliked_ingredients, dependent: :destroy
-  has_many :health_goals, dependent: :destroy
   has_many :meal_plans, dependent: :destroy
   has_many :recipes, dependent: :destroy
   has_many :ratings, dependent: :destroy
   has_many :meal_logs, dependent: :destroy
+  belongs_to :health_goal, optional: true
+
+  # These are needed to use nested attributes in controller and for destroy attributye
+  accepts_nested_attributes_for :allergies, allow_destroy: true
+  accepts_nested_attributes_for :disliked_ingredients, allow_destroy: true
+  accepts_nested_attributes_for :dietary_preferences, allow_destroy: true
+
+  # This validation enforces the "one or more" rule
+  validate :has_at_least_one_dietary_preference
 
   validates :email, presence: true, uniqueness: true
   validates :first_name, :last_name, :role, presence: true
+
+  private
+
+  def has_at_least_one_dietary_preference
+    if dietary_preferences.empty?
+      errors.add(:base, "User must select at least one dietary preference")
+    end
+  end
 end

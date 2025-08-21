@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2025_08_20_081206) do
+ActiveRecord::Schema[7.2].define(version: 2025_08_21_104011) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -39,11 +39,9 @@ ActiveRecord::Schema[7.2].define(version: 2025_08_20_081206) do
   end
 
   create_table "health_goals", force: :cascade do |t|
-    t.bigint "user_id", null: false
     t.string "goal_name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_health_goals_on_user_id"
   end
 
   create_table "ingredients", force: :cascade do |t|
@@ -136,8 +134,10 @@ ActiveRecord::Schema[7.2].define(version: 2025_08_20_081206) do
     t.datetime "confirmation_sent_at"
     t.datetime "confirmed_at"
     t.string "unconfirmed_email"
+    t.bigint "health_goal_id"
     t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["health_goal_id"], name: "index_users_on_health_goal_id"
     t.index ["jti"], name: "index_users_on_jti", unique: true
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
@@ -145,7 +145,6 @@ ActiveRecord::Schema[7.2].define(version: 2025_08_20_081206) do
   add_foreign_key "allergies", "users"
   add_foreign_key "dietary_preferences", "users"
   add_foreign_key "disliked_ingredients", "users"
-  add_foreign_key "health_goals", "users"
   add_foreign_key "meal_logs", "recipes"
   add_foreign_key "meal_logs", "users"
   add_foreign_key "meal_plan_recipes", "meal_plans"
@@ -156,4 +155,5 @@ ActiveRecord::Schema[7.2].define(version: 2025_08_20_081206) do
   add_foreign_key "recipe_ingredients", "ingredients"
   add_foreign_key "recipe_ingredients", "recipes"
   add_foreign_key "recipes", "users"
+  add_foreign_key "users", "health_goals"
 end
