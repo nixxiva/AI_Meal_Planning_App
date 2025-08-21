@@ -18,4 +18,4 @@ class Api::V1::Users::ConfirmationsController < Devise::ConfirmationsController
     JWT.encode({ user_id: user.id }, Rails.application.credentials.devise_jwt_secret_key!, 'HS256')
   end
 
-  
+end
