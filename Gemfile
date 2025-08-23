@@ -32,6 +32,7 @@ gem "rack-cors"
 gem "devise"
 gem "devise-jwt"
 gem "jsonapi-serializer"
+gem "httparty"
 
 gem "dotenv-rails", groups: [:development, :test]
 
