@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2025_08_21_104011) do
+ActiveRecord::Schema[7.2].define(version: 2025_08_23_181825) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -32,9 +32,9 @@ ActiveRecord::Schema[7.2].define(version: 2025_08_21_104011) do
 
   create_table "disliked_ingredients", force: :cascade do |t|
     t.bigint "user_id", null: false
-    t.string "ingredient_name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "ingredient_name"
     t.index ["user_id"], name: "index_disliked_ingredients_on_user_id"
   end
 
@@ -82,6 +82,18 @@ ActiveRecord::Schema[7.2].define(version: 2025_08_21_104011) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_meal_plans_on_user_id"
+  end
+
+  create_table "pantry_items", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.bigint "ingredient_id", null: false
+    t.float "quantity"
+    t.string "unit"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.string "name"
+    t.index ["ingredient_id"], name: "index_pantry_items_on_ingredient_id"
+    t.index ["user_id"], name: "index_pantry_items_on_user_id"
   end
 
   create_table "ratings", force: :cascade do |t|
@@ -150,6 +162,8 @@ ActiveRecord::Schema[7.2].define(version: 2025_08_21_104011) do
   add_foreign_key "meal_plan_recipes", "meal_plans"
   add_foreign_key "meal_plan_recipes", "recipes"
   add_foreign_key "meal_plans", "users"
+  add_foreign_key "pantry_items", "ingredients"
+  add_foreign_key "pantry_items", "users"
   add_foreign_key "ratings", "recipes"
   add_foreign_key "ratings", "users"
   add_foreign_key "recipe_ingredients", "ingredients"

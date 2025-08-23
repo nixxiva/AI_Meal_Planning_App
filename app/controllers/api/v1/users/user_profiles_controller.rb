@@ -38,11 +38,8 @@ module Api
 
         def user_profile_params
           params.require(:user).permit(
-            :first_name,
-            :last_name,
-            :email,
-            :health_goal_id,
-            allergies_attributes: [:id, :allergy_name, :_destroy],
+            :first_name, :last_name, :email, :health_goal_id,
+            allergies_attributes: [:id, :allergy_name, :ingredient_name, :_destroy],
             disliked_ingredients_attributes: [:id, :ingredient_name, :_destroy],
             dietary_preferences_attributes: [:id, :pref_name, :_destroy]
           )
