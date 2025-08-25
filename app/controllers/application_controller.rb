@@ -1,4 +1,7 @@
 class ApplicationController < ActionController::API
+  include Devise::Controllers::Helpers
+
+  attr_reader :current_user
   before_action :configure_permitted_parameters, if: :devise_controller?
   
   rescue_from ActiveRecord::RecordNotFound, with: :record_not_found
@@ -32,4 +35,27 @@ class ApplicationController < ActionController::API
       render json: { error: 'Missing token' }, status: :unauthorized
     end
   end
+
+  def fetch_nutrition_data(query)
+  begin
+    nutritionix_credentials = Rails.application.credentials.nutritionix
+  
+    response = HTTParty.post(
+      'https://trackapi.nutritionix.com/v2/natural/nutrients',
+      headers: {
+        'x-app-id' => nutritionix_credentials[:app_id],
+        'x-app-key' => nutritionix_credentials[:app_key],
+        'Content-Type' => 'application/json'
+      },
+      body: { query: query }.to_json
+    )
+    
+    puts "Nutritionix API Response: #{response.body}"
+    response.parsed_response
+  rescue StandardError => e
+    puts "Error fetching data from Nutritionix API: #{e.message}"
+    nil
+  end
+end
+
 end

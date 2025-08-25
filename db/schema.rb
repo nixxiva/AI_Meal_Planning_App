@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2025_08_23_181825) do
+ActiveRecord::Schema[7.2].define(version: 2025_08_25_115807) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -46,13 +46,13 @@ ActiveRecord::Schema[7.2].define(version: 2025_08_23_181825) do
 
   create_table "ingredients", force: :cascade do |t|
     t.string "ingredient_name"
-    t.string "unit"
-    t.float "calories_per_unit"
-    t.float "protein_per_unit"
-    t.float "carbs_per_unit"
-    t.float "fat_per_unit"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.float "serving_weight_grams"
+    t.float "calories_per_gram"
+    t.float "protein_per_gram"
+    t.float "carbs_per_gram"
+    t.float "fat_per_gram"
   end
 
   create_table "meal_logs", force: :cascade do |t|
@@ -119,11 +119,7 @@ ActiveRecord::Schema[7.2].define(version: 2025_08_23_181825) do
 
   create_table "recipes", force: :cascade do |t|
     t.string "title"
-    t.string "instructions"
-    t.float "calories"
-    t.float "protein"
-    t.float "carbs"
-    t.float "fat"
+    t.text "instructions"
     t.bigint "user_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false

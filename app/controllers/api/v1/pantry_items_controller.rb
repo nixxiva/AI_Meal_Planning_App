@@ -1,84 +1,75 @@
-require 'httparty'
-
 class Api::V1::PantryItemsController < ApplicationController
   before_action :authenticate_user!
   before_action :set_user
-	before_action :set_pantry_item, only: [:update, :destroy]
+  before_action :set_pantry_item, only: [:update, :destroy]
 
   def index
     @pantry_items = @user.pantry_items.includes(:ingredient)
     render json: @pantry_items.as_json(include: :ingredient)
   end
 
-  def create
-    # Getting ingredient name from the request
-    ingredient_name = pantry_item_params[:name]
+ def create
+  ingredient = find_or_create_ingredient(
+    pantry_item_params[:name],
+    pantry_item_params[:quantity],
+    pantry_item_params[:unit]
+  )
 
-    # Try to find the ingredient in the database by name
-    ingredient = Ingredient.find_by(ingredient_name: ingredient_name)
+  if ingredient.nil?
+    render json: { error: "Ingredient not found or nutritional data unavailable." }, status: :unprocessable_entity
+    return
+  end
 
-    # Create ingredient if it doesn't exist
-    unless ingredient
-      nutrition_data = fetch_nutrition_data(ingredient_name)
+  pantry_item = @user.pantry_items.new(
+    name: pantry_item_params[:name],
+    quantity: pantry_item_params[:quantity],
+    unit: pantry_item_params[:unit],
+    ingredient_id: ingredient.id
+  )
 
-      if nutrition_data && nutrition_data['foods'].present? && nutrition_data['foods'].first
-				food = nutrition_data['foods'].first
+  if pantry_item.save
+    render json: pantry_item.as_json(include: { ingredient: { only: [:ingredient_name] } }), status: :created
+  else
+    render json: { error: pantry_item.errors.full_messages }, status: :unprocessable_entity
+  end
+end
 
-				ingredient = Ingredient.create!(
-					ingredient_name: ingredient_name,
-					unit: food['serving_unit'],
-					calories_per_unit: food['nf_calories'],
-					protein_per_unit: food['nf_protein'],
-					carbs_per_unit: food['nf_total_carbohydrate'],
-					fat_per_unit: food['nf_total_fat']
-				)
+  def update
+    unless @pantry_item
+      render json: { error: "Pantry item not found" }, status: :not_found
+      return
+    end
 
-				puts "Ingredient created: #{ingredient.inspect}"
-			else
-				render json: { error: "Ingredient not found or nutritional data unavailable." }, status: :unprocessable_entity
-				return
-			end
-		end
-
-    # ingredient is either found or created, create pantry_item for user
-    pantry_item = @user.pantry_items.new(
-			name: ingredient_name,
-      quantity: pantry_item_params[:quantity], 
-      unit: pantry_item_params[:unit],
-      ingredient_id: ingredient.id  # Store ingredient_id as foreign key
-    )
-
-    if pantry_item.save
-      render json: pantry_item.as_json(include: {ingredient: { only: [:ingredient_name] } }), status: :created
+    update_attributes = pantry_item_params.compact
+    
+    if update_attributes[:name].present? && update_attributes[:name] != @pantry_item.name
+      new_ingredient = find_or_create_ingredient(
+        update_attributes[:name],
+        update_attributes[:quantity] || @pantry_item.quantity,
+        update_attributes[:unit] || @pantry_item.unit
+      )
+      
+      if new_ingredient.nil?
+        render json: { error: "New ingredient not found or nutritional data unavailable." }, status: :unprocessable_entity
+        return
+      end
+      
+      update_attributes[:ingredient_id] = new_ingredient.id
+    end
+    
+    if @pantry_item.update(update_attributes)
+      render json: @pantry_item, status: :ok
     else
-      render json: { error: pantry_item.errors.full_messages }, status: :unprocessable_entity
+      render json: { error: @pantry_item.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
-	def update
-		unless @pantry_item
-			render json: { error: "Pantry item not found"}, status: :not_found
-			return
-		end
-
-		update_params = {}
-
-		update_params[:quantity] = pantry_item_params[:quantity] if pantry_item_params[:quantity].present?
-		update_params[:unit] = pantry_item_params[:unit] if pantry_item_params[:unit].present?
-
-		if @pantry_item.update(update_params)
-			render json: @pantry_item, status: :ok
-		else
-			render json: { error: @pantry_item.errors.full_messages }, status: :unprocessable_entity
-		end
-	end
-
   def destroy
-		if @pantry_item.destroy
-			render json: { message: "Pantry item deleted successfully"}, status: :ok
-		else
-			render json: { error: @pantry_item.errors.full_messages }, status: :unprocessable_entity
-		end
+    if @pantry_item.destroy
+      render json: { message: "Pantry item deleted successfully" }, status: :ok
+    else
+      render json: { error: @pantry_item.errors.full_messages }, status: :unprocessable_entity
+    end
   end
 
   private
@@ -87,30 +78,69 @@ class Api::V1::PantryItemsController < ApplicationController
     @user = User.find(params[:user_id])
   end
 
-	def set_pantry_item
-		@pantry_item = @user.pantry_items.find_by(id: params[:id])
-		unless @pantry_item
-			render json: { error: "Pantry item not found for this user."}, status: :not_found
-		end
-	end
+  def set_pantry_item
+    @pantry_item = @user.pantry_items.find_by(id: params[:id])
+    render json: { error: "Pantry item not found for this user." }, status: :not_found unless @pantry_item
+  end
 
   def pantry_item_params
     params.require(:pantry_item).permit(:name, :quantity, :unit)
   end
 
-  def fetch_nutrition_data(query)
+  def find_or_create_ingredient(ingredient_name, quantity, unit)
+    ingredient = Ingredient.find_by(ingredient_name: ingredient_name)
+
+    unless ingredient
+      nutrition_data = fetch_nutrition_data(ingredient_name, quantity, unit)
+
+      if nutrition_data && nutrition_data['foods'].present?
+        food = nutrition_data['foods'].first
+        
+        total_grams = food['serving_weight_grams']
+        if total_grams.nil? || total_grams.zero?
+          return nil 
+        end
+
+        grams_per_serving_unit = total_grams / food['serving_qty']
+        
+        calories_per_gram = food['nf_calories'] / total_grams
+        protein_per_gram = food['nf_protein'] / total_grams
+        carbs_per_gram = food['nf_total_carbohydrate'] / total_grams
+        fat_per_gram = food['nf_total_fat'] / total_grams
+
+        ingredient = Ingredient.create(
+          ingredient_name: ingredient_name,
+          calories_per_gram: calories_per_gram,
+          protein_per_gram: protein_per_gram,
+          carbs_per_gram: carbs_per_gram,
+          fat_per_gram: fat_per_gram,
+          serving_weight_grams: grams_per_serving_unit
+        )
+      end
+    end
+
+    ingredient
+  end
+
+  def fetch_nutrition_data(query, quantity, unit)
+  begin
+    nutritionix_credentials = Rails.application.credentials.nutritionix
+
+    formatted_query = "#{quantity} #{unit} of #{query}"
+
     response = HTTParty.post(
       'https://trackapi.nutritionix.com/v2/natural/nutrients',
       headers: {
-        'x-app-id' => '68de7069',
-        'x-app-key' => '54b820c1589e40b7b34b22b9e5d4021b',
+        'x-app-id' => nutritionix_credentials[:app_id],
+        'x-app-key' => nutritionix_credentials[:app_key],
         'Content-Type' => 'application/json'
       },
-      body: { query: query }.to_json
+      body: { query: formatted_query }.to_json
     )
-
-    puts "Nutritionix API Response: #{response.body}"
-
-    response
+    response.parsed_response
+  rescue StandardError => e
+    Rails.logger.error "Error fetching data from Nutritionix API: #{e.message}"
+    nil
   end
+end
 end
