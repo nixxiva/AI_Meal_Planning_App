@@ -26,8 +26,16 @@ Rails.application.routes.draw do
         resources :dietary_preferences, only: [:index, :create, :destroy]
       end
       
+      # Ingredients management (global/admin level)
+      resources :ingredients, only: [:index, :show, :create, :update, :destroy] do
+        collection do
+          post :search_nutritionix
+          get :search  # For searching existing ingredients
+        end
+      end
+      
       # Non-nested resources (not specific to a user) will adjust if need under user
-      resources :recipes, only: [:index, :show, :create] do
+      resources :recipes, only: [:index, :show, :update, :create, :destroy] do
         member do
           post :rate
           post :adjust

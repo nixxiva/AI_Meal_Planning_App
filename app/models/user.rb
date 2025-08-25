@@ -23,7 +23,6 @@ class User < ApplicationRecord
   accepts_nested_attributes_for :dietary_preferences, allow_destroy: true
 
   # one or more rule
-  validate :has_at_least_one_dietary_preference
 
   validates :email, presence: true, uniqueness: true
   validates :first_name, :last_name, :role, presence: true
@@ -31,7 +30,7 @@ class User < ApplicationRecord
   private
 
   def has_at_least_one_dietary_preference
-    if dietary_preferences.empty?
+    if @user.confirmed? && dietary_preferences.empty?
       errors.add(:base, "User must select at least one dietary preference")
     end
   end
