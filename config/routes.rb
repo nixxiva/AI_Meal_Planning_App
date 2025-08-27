@@ -17,7 +17,7 @@ Rails.application.routes.draw do
       resources :users, only: [:show] do
         #user_profile route
         resource :user_profile, only: [:show, :update, :destroy], controller: 'users/user_profiles'
-        
+        resources :ingredients, only: [:index, :show] #ingredients JSON
         resources :pantry_items, only: [:index, :create, :update, :destroy]
         resources :meal_plans, only: [:index, :create]
         resources :meal_logs, only: [:index, :create]
