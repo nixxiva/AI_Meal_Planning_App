@@ -30,15 +30,15 @@ class Api::V1::MealPlanRecipesController < ApplicationController
 
   # DEL /api/v1/users/:user_id/meal_plans/:meal_plan_id/meal_plan_recipes/:id
   def destroy
-  meal_plan_recipe = @meal_plan.meal_plan_recipes.find_by(id: params[:id])
+    meal_plan_recipe = @meal_plan.meal_plan_recipes.find_by(id: params[:id])
 
-  if meal_plan_recipe
-    meal_plan_recipe.destroy
-    render json: { status: 'success', message: 'Recipe removed from meal plan successfully' }, status: :ok
-  else
-    render json: { status: 'error', message: 'Meal plan recipe not found' }, status: :not_found
+    if meal_plan_recipe
+      meal_plan_recipe.destroy
+      render json: { status: 'success', message: 'Recipe removed from meal plan successfully' }, status: :ok
+    else
+      render json: { status: 'error', message: 'Meal plan recipe not found' }, status: :not_found
+    end
   end
-end
 
   private
   
