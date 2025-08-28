@@ -15,11 +15,13 @@ Rails.application.routes.draw do
                  }
       
       resources :users, only: [:show] do
-        #user_profile route
+        # user_profile route
         resource :user_profile, only: [:show, :update, :destroy], controller: 'users/user_profiles'
         resources :ingredients, only: [:index, :show] #ingredients JSON
         resources :pantry_items, only: [:index, :create, :update, :destroy]
-        resources :meal_plans, only: [:index, :create]
+        resources :meal_plans, only: [:index, :create, :show, :destroy] do
+          resources :meal_plan_recipes, only: [:create, :destroy]
+        end
         resources :meal_logs, only: [:index, :create]
         resources :disliked_ingredients, only: [:create, :destroy]
         resources :allergies, only: [:index, :create, :destroy]
@@ -34,7 +36,7 @@ Rails.application.routes.draw do
         end
       end
       
-      # Non-nested resources (not specific to a user) will adjust if need under user
+      # Non-nested
       resources :recipes, only: [:index, :show, :update, :create, :destroy] do
         member do
           post :rate
