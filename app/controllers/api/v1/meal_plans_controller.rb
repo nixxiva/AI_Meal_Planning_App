@@ -43,7 +43,7 @@ class Api::V1::MealPlansController < ApplicationController
   end
 
   # POST /api/v1/users/:user_id/meal_plans/generate
-  def generate_1_day_plan
+  def generate
     meal_plan = MealPlanGeneratorService.new(@user).generate_1_day_plan
     render json: meal_plan.to_json(include: { meal_plan_recipes: { include: :recipe } })
   rescue StandardError => e
