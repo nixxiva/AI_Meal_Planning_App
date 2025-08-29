@@ -19,7 +19,10 @@ Rails.application.routes.draw do
         resource :user_profile, only: [:show, :update, :destroy], controller: 'users/user_profiles'
         resources :ingredients, only: [:index, :show] #ingredients JSON
         resources :pantry_items, only: [:index, :create, :update, :destroy]
-        resources :meal_plans, only: [:index, :create, :show, :destroy] do
+        resources :meal_plans, only: [:index, :create, :show, :destroy] do #endpoint for generate meal
+          collection do
+            post :generate
+          end
           resources :meal_plan_recipes, only: [:create, :destroy]
         end
         resources :meal_logs, only: [:index, :create]
