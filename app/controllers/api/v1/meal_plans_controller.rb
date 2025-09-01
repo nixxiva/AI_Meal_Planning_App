@@ -4,8 +4,8 @@ class Api::V1::MealPlansController < ApplicationController
 
     # GET /api/v1/users/:user_id/meal_plans
   def index
-    meal_plans = @user.meal_plans.includes(meal_plan_recipes: :recipe)
-    render json: meal_plans.to_json(include: { meal_plan_recipes: { include: :recipe } })
+    meal_plans = @user.meal_plans.includes(meal_plan_recipes: { recipe: { recipe_ingredients: :ingredient}})
+    render json: meal_plans.to_json(include: { meal_plan_recipes: { include: {recipe: {include: {recipe_ingredients: {include: :ingredient} } }}}})
   end
 
     # POST /api/v1/users/:user_id/meal_plans
