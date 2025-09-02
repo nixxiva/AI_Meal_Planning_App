@@ -33,6 +33,8 @@ gem "devise"
 gem "devise-jwt"
 gem "jsonapi-serializer"
 gem "httparty"
+gem "kaminari"
+
 # OpenAI Gem
 gem 'ruby-openai', '~> 8.2'
 
