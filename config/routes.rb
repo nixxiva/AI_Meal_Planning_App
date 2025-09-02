@@ -46,6 +46,10 @@ Rails.application.routes.draw do
           post :adjust
         end
       end
+
+      namespace :admin do
+        resources :users, only: [:create, :show, :update, :destroy, :index]
+      end
     end
   end
 end

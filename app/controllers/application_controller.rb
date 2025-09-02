@@ -9,7 +9,7 @@ class ApplicationController < ActionController::API
   protected
 
   def record_not_found
-    render json: { error: "User not found" }, status: :not_found
+    render json: { error: "Record not found" }, status: :not_found
   end
 
   def configure_permitted_parameters
@@ -18,6 +18,7 @@ class ApplicationController < ActionController::API
   end
 
   def authenticate_user!
+    Rails.logger.debug("Authorization Header: #{request.headers['Authorization']}")
     token = request.headers["Authorization"]&.split(" ")&.last
     if token
       begin
@@ -36,26 +37,37 @@ class ApplicationController < ActionController::API
     end
   end
 
-  def fetch_nutrition_data(query)
-  begin
-    nutritionix_credentials = Rails.application.credentials.nutritionix
-  
-    response = HTTParty.post(
-      'https://trackapi.nutritionix.com/v2/natural/nutrients',
-      headers: {
-        'x-app-id' => nutritionix_credentials[:app_id],
-        'x-app-key' => nutritionix_credentials[:app_key],
-        'Content-Type' => 'application/json'
-      },
-      body: { query: query }.to_json
-    )
-    
-    puts "Nutritionix API Response: #{response.body}"
-    response.parsed_response
-  rescue StandardError => e
-    puts "Error fetching data from Nutritionix API: #{e.message}"
-    nil
-  end
-end
+  def authenticate_admin!
+    authenticate_user!
 
+    return if @current_user.nil?
+    Rails.logger.error("No current user found.")
+
+    unless @current_user.role == 'admin'
+      render json: { error: 'Unauthorized - Admin access required' }, status: :unauthorized
+      return
+    end
+  end
+
+  def fetch_nutrition_data(query)
+    begin
+      nutritionix_credentials = Rails.application.credentials.nutritionix
+    
+      response = HTTParty.post(
+        'https://trackapi.nutritionix.com/v2/natural/nutrients',
+        headers: {
+          'x-app-id' => nutritionix_credentials[:app_id],
+          'x-app-key' => nutritionix_credentials[:app_key],
+          'Content-Type' => 'application/json'
+        },
+        body: { query: query }.to_json
+      )
+      
+      puts "Nutritionix API Response: #{response.body}"
+      response.parsed_response
+    rescue StandardError => e
+      puts "Error fetching data from Nutritionix API: #{e.message}"
+      nil
+    end
+  end
 end
