@@ -34,7 +34,7 @@ gem "devise-jwt"
 gem "jsonapi-serializer"
 gem "httparty"
 # OpenAI Gem
-gem 'ruby-openai', '~> 8.2'
+gem 'ruby-openai', '~> 8.3'
 
 gem "dotenv-rails", groups: [:development, :test]
 
