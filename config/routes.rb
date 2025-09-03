@@ -25,7 +25,12 @@ Rails.application.routes.draw do
           end
           resources :meal_plan_recipes, only: [:create, :destroy]
         end
-        resources :meal_logs, only: [:index, :create]
+        resources :meal_logs, only: [:index, :create, :update, :destroy] do
+          collection do
+            get :today_totals
+            get :today
+          end
+        end
         resources :disliked_ingredients, only: [:create, :destroy]
         resources :allergies, only: [:index, :create, :destroy]
         resources :dietary_preferences, only: [:index, :create, :destroy]
