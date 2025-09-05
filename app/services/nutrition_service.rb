@@ -102,23 +102,39 @@ class NutritionService
     }
   end
 
-  # Helper method to convert unit to grams
   def get_grams_for_unit(unit)
-    case unit.downcase
-    when 'cup'
-      250.0
-    when 'tablespoon'
-      15.0
-    when 'teaspoon'
-      5.0
+    case unit.downcase.strip
     when 'g', 'gram', 'grams'
       1.0
+    when 'kg', 'kilogram', 'kilograms'  
+      1000.0
     when 'lb', 'pound', 'pounds'
-      453.592
+      453.59
     when 'oz', 'ounce', 'ounces'
-      28.3495
+      28.35
+    when 'cup', 'cups'
+      240.0
+    when 'tablespoon', 'tbsp'
+      15.0
+    when 'teaspoon', 'tsp'
+      5.0
+    when 'ml', 'milliliter'
+      1.0
+    when 'liter', 'l', 'litre'
+      1000.0
+    when 'small'
+      75.0
+    when 'medium'
+      100.0
+    when 'large'
+      150.0
+    when 'slice'
+      25.0
+    when 'piece', 'pc', 'whole'
+      100.0
     else
-      0.0
+      Rails.logger.warn "Unknown unit: #{unit}"
+      100.0  # Safe default
     end
   end
 end
