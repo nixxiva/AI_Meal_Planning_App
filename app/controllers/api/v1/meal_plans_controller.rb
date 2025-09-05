@@ -45,7 +45,7 @@ class Api::V1::MealPlansController < ApplicationController
   # POST /api/v1/users/:user_id/meal_plans/generate
   def generate
     meal_plan = MealPlanGeneratorService.new(@user).generate_1_day_plan
-    render json: meal_plan.to_json(include: { meal_plan_recipes: { include: :recipe } })
+    render json: meal_plan_json(meal_plan)
   rescue StandardError => e
     render json: { error: e.message }, status: :unprocessable_entity
   end
@@ -58,5 +58,32 @@ class Api::V1::MealPlansController < ApplicationController
 
   def meal_plan_params
     params.require(:meal_plan).permit(:start_date, :end_date)
+  end
+
+  def meal_plan_json(meal_plan)
+    meal_plan.as_json(
+      include: {
+        meal_plan_recipes: {
+          include: {
+            recipe: {
+              include: {
+                recipe_ingredients: {
+                  include: :ingredient
+                }
+              }
+            }
+          }
+        }
+      }
+    ).tap do |json|
+      json["meal_plan_recipes"].each do |mpr|
+        mpr["recipe"]["recipe_ingredients"].each do |ri|
+          ing_name = ri["ingredient"]["ingredient_name"]
+          pantry_item = @user.pantry_items.find_by(name: ing_name)
+          ri["from_pantry"] = pantry_item.present?
+          ri["substitute"] = pantry_item.present? ? nil : RecipeSuggestionService.new.suggest_substitute(ing_name)
+        end
+      end
+    end
   end
 end
