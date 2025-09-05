@@ -3,7 +3,7 @@ class MealPlanGeneratorService
     @user = user
   end
 
-  # Main method to generate a 1-day meal plan
+  # generate 1 day plan only
   def generate_1_day_plan
     preferences = gather_preferences
     ai_response = call_ai_service(preferences)
@@ -35,18 +35,25 @@ class MealPlanGeneratorService
 
       Requirements:
       1. Provide exactly 3 meals: breakfast, lunch, and dinner.
-      2. Format the output as a JSON array. Each element should have:
-          - "meal_type": one of "breakfast", "lunch", "dinner"
-          - "recipe": an object with:
-              - "title": string
-              - "instructions": string
-              - "ingredients": array of objects with:
-                  - "name": string
-                  - "quantity": number
-                  - "unit": string
+      2. Each meal must include the key "meal_type" with value "breakfast", "lunch", or "dinner".
+      3. Format the output strictly as a JSON array. Each element must be:
+          {
+            "meal_type": "breakfast|lunch|dinner"
+            "recipe": {
+              "title": string,
+              "instructions": string,
+              "ingredients": [
+                {
+                  "name": string,
+                  "quantity": number,
+                  "unit": string
+                }
+              ]
+            }
+          }
 
-      Please respond with only valid JSON. Do not include markdown, code blocks, or extra text.
-      PROMPT
+      Respond only with valid JSON, no markdown, no extra text.
+    PROMPT
 
     OpenaiService.new.generate_meal_plan(prompt)
   end
@@ -98,16 +105,21 @@ class MealPlanGeneratorService
         )
       end
 
-      meal_type = meal["meal_type"]
-      next unless MealPlanRecipe.meal_types.keys.include?(meal_type)
+      meal_type_index = meal["meal_type"].to_i
 
-      MealPlanRecipe.create!(
-        meal_plan: meal_plan,
-        recipe: recipe,
-        meal_type: meal_type
-      )
+      if MealPlanRecipe.meal_types.values.include?(meal_type_index)
+        MealPlanRecipe.create!(
+          meal_plan: meal_plan,
+          recipe: recipe,
+          meal_type: meal_type_index
+        )
+      else
+        # Rails.logger.warn "Skipping invalid meal_type: #{meal["meal_type"]}"
+        Rails.logger.info "AI meal_type raw value: #{meal['meal_type'].inspect}"
+      end
     end
 
-    meal_plan
+    meal_plan 
+    
   end
 end
