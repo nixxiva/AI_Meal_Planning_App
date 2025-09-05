@@ -2,13 +2,13 @@ class Api::V1::MealPlansController < ApplicationController
   before_action :authenticate_user!
   before_action :set_user
 
-    # GET /api/v1/users/:user_id/meal_plans
+  # GET /api/v1/users/:user_id/meal_plans
   def index
     meal_plans = @user.meal_plans.includes(meal_plan_recipes: { recipe: { recipe_ingredients: :ingredient}})
     render json: meal_plans.to_json(include: { meal_plan_recipes: { include: {recipe: {include: {recipe_ingredients: {include: :ingredient} } }}}})
   end
-
-    # POST /api/v1/users/:user_id/meal_plans
+  
+  # POST /api/v1/users/:user_id/meal_plans
   def create
     meal_plan = @user.meal_plans.build(meal_plan_params)
 
@@ -19,7 +19,7 @@ class Api::V1::MealPlansController < ApplicationController
     end
   end
 
-    # GET /api/v1/users/:user_id/meal_plans/:id
+  # GET /api/v1/users/:user_id/meal_plans/:id
   def show
     meal_plan = @user.meal_plans.find_by(id: params[:id])
 

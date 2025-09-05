@@ -15,13 +15,24 @@ class NutritionService
   # Fetch nutrition data from the Nutritionix API
   def fetch_nutrition_data(query, quantity, unit)
     formatted_query = "#{quantity} #{unit} of #{query}"
+    Rails.logger.info "Nutritionix API Request: #{formatted_query}"
+    
     begin
       response = HTTParty.post(
         "#{BASE_URL}/natural/nutrients",
         headers: @headers,
         body: { query: formatted_query }.to_json
       )
-      response.parsed_response
+      
+      Rails.logger.info "Nutritionix API Response Status: #{response.code}"
+      Rails.logger.info "Nutritionix API Response Body: #{response.body}"
+      
+      if response.success?
+        response.parsed_response
+      else
+        Rails.logger.error "Nutritionix API Error: #{response.code} - #{response.body}"
+        nil
+      end
     rescue StandardError => e
       Rails.logger.error "Error fetching data from Nutritionix API: #{e.message}"
       nil
@@ -30,9 +41,11 @@ class NutritionService
 
   # Find or create an ingredient based on data
   def find_or_create_ingredient(ingredient_name, quantity, unit)
-    ingredient = Ingredient.find_by(ingredient_name: ingredient_name.downcase.strip)
+  # Find the ingredient only if it exists and has nutritional data (calories > 0)
+    ingredient = Ingredient.where(
+    ingredient_name: ingredient_name.downcase.strip).where("calories_per_gram > 0").first
 
-    # If ingredient doesn't exist, fetch nutrition data and create a new one
+    # If an ingredient with valid data doesn't exist, proceed to create one
     unless ingredient
       nutrition_data = fetch_nutrition_data(ingredient_name, quantity, unit)
 
@@ -44,17 +57,17 @@ class NutritionService
         total_carbs = food['nf_total_carbohydrate']
 
         # Create the ingredient in the database
-        ingredient = Ingredient.create(
+        ingredient = Ingredient.create!(
           ingredient_name: food['food_name'].downcase,
-          calories_per_gram: total_calories / food['serving_weight_grams'],
-          protein_per_gram: total_protein / food['serving_weight_grams'],
-          carbs_per_gram: total_carbs / food['serving_weight_grams'],
-          fat_per_gram: total_fat / food['serving_weight_grams'],
-          serving_weight_grams: food['serving_weight_grams']
+          calories_per_gram: total_calories / food['serving_weight_grams'].round(2),
+          protein_per_gram: total_protein / food['serving_weight_grams'].round(2),
+          carbs_per_gram: total_carbs / food['serving_weight_grams'].round(2),
+          fat_per_gram: total_fat / food['serving_weight_grams'].round(2),
+          serving_weight_grams: food['serving_weight_grams'].round(2)
         )
       else
-        # If no data found, create a default ingredient with no nutritional data
-        ingredient = Ingredient.create(
+        # If no data found from API, create a default ingredient with no nutritional data
+        ingredient = Ingredient.create!(
           ingredient_name: ingredient_name, calories_per_gram: 0, protein_per_gram: 0, carbs_per_gram: 0, fat_per_gram: 0, serving_weight_grams: 0)
       end
     end
@@ -75,17 +88,17 @@ class NutritionService
 
       total_grams = get_grams_for_unit(ri.unit) * ri.quantity.to_f
 
-      total_calories += ingredient.calories_per_gram * total_grams
-      total_protein += ingredient.protein_per_gram * total_grams
-      total_carbs += ingredient.carbs_per_gram * total_grams
-      total_fat += ingredient.fat_per_gram * total_grams
+      total_calories += (ingredient.calories_per_gram || 0) * total_grams
+      total_protein += (ingredient.protein_per_gram || 0) * total_grams
+      total_carbs += (ingredient.carbs_per_gram || 0) * total_grams
+      total_fat += (ingredient.fat_per_gram || 0) * total_grams
     end
 
     {
-      total_calories: total_calories,
-      total_protein: total_protein,
-      total_carbs: total_carbs,
-      total_fat: total_fat
+      total_calories: total_calories.round(2),
+      total_protein: total_protein.round(2),
+      total_carbs: total_carbs.round(2),
+      total_fat: total_fat.round(2)
     }
   end
 

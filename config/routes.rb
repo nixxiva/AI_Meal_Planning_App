@@ -52,6 +52,8 @@ Rails.application.routes.draw do
         end
       end
 
+      resources :health_goals, only: [:index]
+
       namespace :admin do
         resources :users, only: [:create, :show, :update, :destroy, :index]
       end
