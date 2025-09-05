@@ -80,6 +80,10 @@ class MealPlanGeneratorService
       recipe_data["ingredients"]&.each do |ing|
         next unless ing["name"].present?
 
+        pantry_item = @user.pantry_items.find_by(name: ing["name"])
+        from_pantry = pantry_item.present?
+        substitute = from_pantry ? nil : RecipeSuggestionService.new.suggest_substitute(ing["name"])
+
         nutrition = NutritionixService.new.search_food(ing["name"]) || {}
 
         ingredient = Ingredient.find_or_create_by!(ingredient_name: ing["name"]) do |i|
@@ -90,22 +94,27 @@ class MealPlanGeneratorService
           i.fat_per_gram          = nutrition["fat_per_gram"] || 0
         end
 
-        RecipeIngredient.find_or_create_by!(
+        ri = RecipeIngredient.find_or_create_by!(
           recipe: recipe,
           ingredient: ingredient,
           quantity: ing["quantity"] || 0,
           unit: ing["unit"] || ""
         )
+
+        ri.define_singleton_method(:from_pantry) { from_pantry }
+        ri.define_singleton_method(:substitute) { substitute }
       end
 
-      meal_type = meal["meal_type"]
-      next unless MealPlanRecipe.meal_types.keys.include?(meal_type)
-
-      MealPlanRecipe.create!(
-        meal_plan: meal_plan,
-        recipe: recipe,
-        meal_type: meal_type
-      )
+      meal_type = meal["meal_type"].to_s.downcase
+      if MealPlanRecipe.meal_types.keys.include?(meal_type)
+        MealPlanRecipe.create!(
+          meal_plan: meal_plan,
+          recipe: recipe,
+          meal_type: meal_type
+        )
+      else
+        Rails.logger.warn "Skipping invalid meal_type: #{meal_type}"
+      end
     end
 
     meal_plan
