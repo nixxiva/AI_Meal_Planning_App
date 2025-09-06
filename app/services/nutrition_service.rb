@@ -41,12 +41,13 @@ class NutritionService
 
   # Find or create an ingredient based on data
   def find_or_create_ingredient(ingredient_name, quantity, unit)
-  # Find the ingredient only if it exists and has nutritional data (calories > 0)
-    ingredient = Ingredient.where(
-    ingredient_name: ingredient_name.downcase.strip).where("calories_per_gram > 0").first
+    ingredient_name = ingredient_name.downcase.strip
 
-    # If an ingredient with valid data doesn't exist, proceed to create one
-    unless ingredient
+    # Try to find existing ingredient by name, regardless of calories
+    ingredient = Ingredient.find_or_initialize_by(ingredient_name: ingredient_name)
+
+    # Only fetch and update nutritional data if calories are not set
+    if ingredient.calories_per_gram.to_f <= 0
       nutrition_data = fetch_nutrition_data(ingredient_name, quantity, unit)
 
       if nutrition_data && nutrition_data['foods'].present?
@@ -56,9 +57,7 @@ class NutritionService
         total_fat = food['nf_total_fat']
         total_carbs = food['nf_total_carbohydrate']
 
-        # Create the ingredient in the database
-        ingredient = Ingredient.create!(
-          ingredient_name: food['food_name'].downcase,
+        ingredient.update!(
           calories_per_gram: total_calories / food['serving_weight_grams'].round(2),
           protein_per_gram: total_protein / food['serving_weight_grams'].round(2),
           carbs_per_gram: total_carbs / food['serving_weight_grams'].round(2),
@@ -66,9 +65,14 @@ class NutritionService
           serving_weight_grams: food['serving_weight_grams'].round(2)
         )
       else
-        # If no data found from API, create a default ingredient with no nutritional data
-        ingredient = Ingredient.create!(
-          ingredient_name: ingredient_name, calories_per_gram: 0, protein_per_gram: 0, carbs_per_gram: 0, fat_per_gram: 0, serving_weight_grams: 0)
+        # Default ingredient if no API data
+        ingredient.update!(
+          calories_per_gram: 0,
+          protein_per_gram: 0,
+          carbs_per_gram: 0,
+          fat_per_gram: 0,
+          serving_weight_grams: 0
+        )
       end
     end
 

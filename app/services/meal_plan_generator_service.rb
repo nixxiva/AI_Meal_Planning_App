@@ -19,7 +19,9 @@ class MealPlanGeneratorService
       dietary_preferences: @user.dietary_preferences.pluck(:pref_name),
       allergies: @user.allergies.pluck(:allergy_name),
       disliked_ingredients: @user.disliked_ingredients.pluck(:ingredient_name),
-      health_goal: @user.health_goal&.goal_name
+      health_goal: @user.health_goal&.goal_name,
+      pantry_items: @user.pantry_items.pluck(:name),
+      recipes: @user.recipes.pluck(:title)
     }
   end
 
@@ -32,21 +34,27 @@ class MealPlanGeneratorService
       Allergies: #{preferences[:allergies].join(", ")}
       Disliked ingredients: #{preferences[:disliked_ingredients].join(", ")}
       Health goal: #{preferences[:health_goal]}
+      Available pantry items: #{preferences[:pantry_items].join(", ")}
 
       Requirements:
-      1. Provide exactly 3 meals: breakfast, lunch, and dinner.
-      2. Format the output as a JSON array. Each element should have:
-          - "meal_type": one of "breakfast", "lunch", "dinner"
-          - "recipe": an object with:
-              - "title": string
-              - "instructions": string
-              - "ingredients": array of objects with:
-                  - "name": string
-                  - "quantity": number
-                  - "unit": string
+        1. Prioritize using pantry items when possible, but you may use all or just a subset depending on the meal.
+        2. Suggest only a few additional ingredients beyond the pantry to make meals balanced and nutritious. Avoid unnecessary spices or minor ingredients unless essential.
+        3. Ensure each meal is unique. Use different subsets of pantry items for each meal when possible and avoid repeating recipes listed in #{preferences[:recipes].join(", ")}.
+        4. Include diverse main ingredients (vegetables, proteins, grains, etc.) to make each meal distinct.
+        5. Feel free to create entirely new dishes or variations of pantry-based dishes as long as they align with the user's preferences.
+        6. Provide exactly 3 meals: breakfast, lunch, and dinner.
+        7. Format the output as a JSON array. Each element should have:
+            - "meal_type": one of "breakfast", "lunch", "dinner"
+            - "recipe": an object with:
+                - "title": string
+                - "instructions": string
+                - "ingredients": array of objects with:
+                    - "name": string
+                    - "quantity": number
+                    - "unit": string
 
       Please respond with only valid JSON. Do not include markdown, code blocks, or extra text.
-      PROMPT
+    PROMPT
 
     OpenaiService.new.generate_meal_plan(prompt)
   end
@@ -84,15 +92,8 @@ class MealPlanGeneratorService
         from_pantry = pantry_item.present?
         substitute = from_pantry ? nil : RecipeSuggestionService.new.suggest_substitute(ing["name"])
 
-        nutrition = NutritionixService.new.search_food(ing["name"]) || {}
-
-        ingredient = Ingredient.find_or_create_by!(ingredient_name: ing["name"]) do |i|
-          i.serving_weight_grams = nutrition["serving_weight_grams"] || 0
-          i.calories_per_gram     = nutrition["calories_per_gram"] || 0
-          i.protein_per_gram      = nutrition["protein_per_gram"] || 0
-          i.carbs_per_gram        = nutrition["carbs_per_gram"] || 0
-          i.fat_per_gram          = nutrition["fat_per_gram"] || 0
-        end
+        service = NutritionService.new
+        ingredient = service.find_or_create_ingredient(ing["name"].strip.downcase, ing["quantity"] || 1, ing["unit"] || "piece")
 
         ri = RecipeIngredient.find_or_create_by!(
           recipe: recipe,
