@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
+ActiveRecord::Schema[7.2].define(version: 2025_09_05_233218) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -53,6 +53,7 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.float "protein_per_gram"
     t.float "carbs_per_gram"
     t.float "fat_per_gram"
+    t.index "lower((ingredient_name)::text)", name: "index_unique_lowercase_ingredients", unique: true
   end
 
   create_table "meal_logs", force: :cascade do |t|
@@ -71,7 +72,7 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.bigint "recipe_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.string "meal_type"
+    t.integer "meal_type"
     t.index ["meal_plan_id"], name: "index_meal_plan_recipes_on_meal_plan_id"
     t.index ["recipe_id"], name: "index_meal_plan_recipes_on_recipe_id"
   end
