@@ -8,6 +8,7 @@ class MealPlanGeneratorService
     preferences = gather_preferences
     ai_response = call_ai_service(preferences)
     meal_plan_data = parse_ai_response(ai_response)
+    validate_meal_plan!(meal_plan_data)
 
     create_meal_plan_in_db(meal_plan_data)
   end
@@ -75,49 +76,45 @@ class MealPlanGeneratorService
   end
 
   def create_meal_plan_in_db(meal_plan_data)
-    meal_plan = @user.meal_plans.create!(start_date: Date.today, end_date: Date.today)
-
-    meal_plan_data.each do |meal|
-      recipe_data = meal["recipe"]
-      next unless recipe_data["title"].present? && recipe_data["instructions"].present?
-
-      recipe = @user.recipes.find_or_create_by!(title: recipe_data["title"]) do |r|
-        r.instructions = recipe_data["instructions"]
-      end
-
-      recipe_data["ingredients"]&.each do |ing|
-        next unless ing["name"].present?
-
-        pantry_item = @user.pantry_items.find_by(name: ing["name"])
-        from_pantry = pantry_item.present?
-        substitute = from_pantry ? nil : RecipeSuggestionService.new.suggest_substitute(ing["name"])
-
+    prepared_ingredients = meal_plan_data.map do |meal|
+      meal["recipe"]["ingredients"].map do |ing|
         service = NutritionService.new
-        ingredient = service.find_or_create_ingredient(ing["name"].strip.downcase, ing["quantity"] || 1, ing["unit"] || "piece")
-
-        ri = RecipeIngredient.find_or_create_by!(
-          recipe: recipe,
-          ingredient: ingredient,
-          quantity: ing["quantity"] || 0,
-          unit: ing["unit"] || ""
-        )
-
-        ri.define_singleton_method(:from_pantry) { from_pantry }
-        ri.define_singleton_method(:substitute) { substitute }
-      end
-
-      meal_type = meal["meal_type"].to_s.downcase
-      if MealPlanRecipe.meal_types.keys.include?(meal_type)
-        MealPlanRecipe.create!(
-          meal_plan: meal_plan,
-          recipe: recipe,
-          meal_type: meal_type
-        )
-      else
-        Rails.logger.warn "Skipping invalid meal_type: #{meal_type}"
+        ingredient = service.find_or_create_ingredient(ing["name"].strip.downcase, ing["quantity"], ing["unit"])
+        { ingredient: ingredient, quantity: ing["quantity"], unit: ing["unit"] }
       end
     end
 
-    meal_plan
+    MealPlan.transaction do
+      meal_plan = @user.meal_plans.create!(start_date: Date.today, end_date: Date.today)
+      meal_plan_data.each_with_index do |meal, index|
+        recipe_data = meal["recipe"]
+        recipe = @user.recipes.find_or_create_by!(title: recipe_data["title"]) do |r|
+          r.instructions = recipe_data["instructions"]
+        end
+        prepared_ingredients[index].each do |attributes|
+          RecipeIngredient.find_or_create_by!(attributes.merge(recipe: recipe))
+        end
+        MealPlanRecipe.create!(meal_plan: meal_plan, recipe: recipe, meal_type: meal["meal_type"].downcase)
+      end
+      meal_plan
+    end
+  end
+
+  def validate_meal_plan!(meals)
+    valid = meals.is_a?(Array) && meals.length == 3 && meals.all? do |meal|
+      next false unless meal.is_a?(Hash) && meal["meal_type"].is_a?(String)
+
+      recipe = meal["recipe"]
+      recipe.is_a?(Hash) && recipe["title"].is_a?(String) && recipe["title"].present? &&
+        recipe["instructions"].is_a?(String) && recipe["instructions"].present? &&
+        recipe["ingredients"].is_a?(Array) && recipe["ingredients"].any? &&
+        recipe["ingredients"].all? do |ingredient|
+          ingredient.is_a?(Hash) && ingredient["name"].is_a?(String) && ingredient["name"].present? &&
+            ingredient["quantity"].is_a?(Numeric) && ingredient["quantity"].finite? && ingredient["quantity"] > 0 &&
+            ingredient["unit"].is_a?(String) && ingredient["unit"].present?
+        end
+    end
+    valid &&= meals.map { |meal| meal["meal_type"].downcase }.sort == MealPlanRecipe.meal_types.keys.sort
+    raise ArgumentError, "Meal plan must contain a complete breakfast, lunch and dinner" unless valid
   end
 end

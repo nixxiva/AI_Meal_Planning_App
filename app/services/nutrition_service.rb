@@ -3,6 +3,10 @@ class NutritionService
   HEADERS = {
     "Content-Type" => "application/json"
   }
+  NUTRIENT_FIELDS = {
+    calories: "nf_calories", protein: "nf_protein",
+    carbs: "nf_total_carbohydrate", fat: "nf_total_fat"
+  }.freeze
 
   def initialize
     @credentials = Rails.application.credentials.nutritionix
@@ -43,71 +47,51 @@ class NutritionService
   def find_or_create_ingredient(ingredient_name, quantity, unit)
     ingredient_name = ingredient_name.downcase.strip
 
-    # Try to find existing ingredient by name, regardless of calories
     ingredient = Ingredient.find_or_initialize_by(ingredient_name: ingredient_name)
-
-    # Only fetch and update nutritional data if calories are not set
-    if ingredient.calories_per_gram.to_f <= 0
+    unless nutrition_available?(ingredient)
       nutrition_data = fetch_nutrition_data(ingredient_name, quantity, unit)
-
-      if nutrition_data && nutrition_data['foods'].present?
-        food = nutrition_data['foods'].first
-        total_calories = food['nf_calories']
-        total_protein = food['nf_protein']
-        total_fat = food['nf_total_fat']
-        total_carbs = food['nf_total_carbohydrate']
-
-        ingredient.update!(
-          calories_per_gram: total_calories / food['serving_weight_grams'].round(2),
-          protein_per_gram: total_protein / food['serving_weight_grams'].round(2),
-          carbs_per_gram: total_carbs / food['serving_weight_grams'].round(2),
-          fat_per_gram: total_fat / food['serving_weight_grams'].round(2),
-          serving_weight_grams: food['serving_weight_grams'].round(2)
-        )
-      else
-        # Default ingredient if no API data
-        ingredient.update!(
-          calories_per_gram: 0,
-          protein_per_gram: 0,
-          carbs_per_gram: 0,
-          fat_per_gram: 0,
-          serving_weight_grams: 0
-        )
+      food = nutrition_data["foods"].first if nutrition_data.is_a?(Hash) && nutrition_data["foods"].is_a?(Array)
+      weight = food["serving_weight_grams"] if food.is_a?(Hash)
+      available = nonnegative_number?(weight) && weight.positive? &&
+        NUTRIENT_FIELDS.values.all? { |field| nonnegative_number?(food[field]) && (food[field].to_f / weight).finite? }
+      attributes = NUTRIENT_FIELDS.to_h do |nutrient, field|
+        ["#{nutrient}_per_gram", available ? food[field].to_f / weight : nil]
       end
+      ingredient.update!(attributes.merge("serving_weight_grams" => available ? weight : nil))
     end
 
     ingredient
   end
 
-  # Update recipe nutrition based on recipe ingredients
-  def update_recipe_nutrition(recipe)
-    total_calories = 0
-    total_protein = 0
-    total_carbs = 0
-    total_fat = 0
-
+  def update_recipe_nutrition(recipe, servings: 1)
+    totals = { total_calories: 0, total_protein: 0, total_carbs: 0, total_fat: 0 }
     recipe.recipe_ingredients.each do |ri|
-      ingredient = ri.ingredient
-      next unless ingredient
+      nutrition = ingredient_nutrition(ri)
+      return unavailable_nutrition unless nutrition[:nutrition_available]
 
-      total_grams = get_grams_for_unit(ri.unit) * ri.quantity.to_f
-
-      total_calories += (ingredient.calories_per_gram || 0) * total_grams
-      total_protein += (ingredient.protein_per_gram || 0) * total_grams
-      total_carbs += (ingredient.carbs_per_gram || 0) * total_grams
-      total_fat += (ingredient.fat_per_gram || 0) * total_grams
+      totals.each_key { |nutrient| totals[nutrient] += nutrition[nutrient] * servings }
     end
+    totals.transform_values { |value| value.round(2) }.merge(nutrition_available: true)
+  end
 
-    {
-      total_calories: total_calories.round(2),
-      total_protein: total_protein.round(2),
-      total_carbs: total_carbs.round(2),
-      total_fat: total_fat.round(2)
-    }
+  def ingredient_nutrition(recipe_ingredient)
+    ingredient = recipe_ingredient.ingredient
+    grams_per_unit = get_grams_for_unit(recipe_ingredient.unit)
+    quantity = Float(recipe_ingredient.quantity, exception: false)
+    return unavailable_nutrition unless nutrition_available?(ingredient) && grams_per_unit &&
+      nonnegative_number?(quantity) && quantity.positive?
+
+    grams = grams_per_unit * quantity
+    totals = NUTRIENT_FIELDS.keys.to_h do |nutrient|
+      ["total_#{nutrient}".to_sym, ingredient.public_send("#{nutrient}_per_gram") * grams]
+    end
+    return unavailable_nutrition unless totals.values.all?(&:finite?)
+
+    totals.merge(nutrition_available: true)
   end
 
   def get_grams_for_unit(unit)
-    case unit.downcase.strip
+    case unit.to_s.downcase.strip
     when 'g', 'gram', 'grams'
       1.0
     when 'kg', 'kilogram', 'kilograms'  
@@ -116,29 +100,23 @@ class NutritionService
       453.59
     when 'oz', 'ounce', 'ounces'
       28.35
-    when 'cup', 'cups'
-      240.0
-    when 'tablespoon', 'tbsp'
-      15.0
-    when 'teaspoon', 'tsp'
-      5.0
-    when 'ml', 'milliliter'
-      1.0
-    when 'liter', 'l', 'litre'
-      1000.0
-    when 'small'
-      75.0
-    when 'medium'
-      100.0
-    when 'large'
-      150.0
-    when 'slice'
-      25.0
-    when 'piece', 'pc', 'whole'
-      100.0
     else
-      Rails.logger.warn "Unknown unit: #{unit}"
-      100.0  # Safe default
+      nil
     end
+  end
+
+  private
+
+  def nutrition_available?(ingredient)
+    ingredient && nonnegative_number?(ingredient.serving_weight_grams) && ingredient.serving_weight_grams.positive? &&
+      NUTRIENT_FIELDS.keys.all? { |nutrient| nonnegative_number?(ingredient.public_send("#{nutrient}_per_gram")) }
+  end
+
+  def nonnegative_number?(value)
+    value.is_a?(Numeric) && value.finite? && value >= 0
+  end
+
+  def unavailable_nutrition
+    { total_calories: nil, total_protein: nil, total_carbs: nil, total_fat: nil, nutrition_available: false }
   end
 end

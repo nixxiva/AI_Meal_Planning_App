@@ -83,10 +83,6 @@ class Api::V1::PantryItemsController < ApplicationController
 
   private
 
-  def set_user
-    @user = User.find(params[:user_id])
-  end
-
   def set_pantry_item
     @pantry_item = @user.pantry_items.find_by(id: params[:id])
     render json: { error: "Pantry item not found for this user." }, status: :not_found unless @pantry_item

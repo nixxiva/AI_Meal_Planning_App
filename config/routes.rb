@@ -14,7 +14,7 @@ Rails.application.routes.draw do
                    confirmations: 'api/v1/users/confirmations'
                  }
       
-      resources :users, only: [:show] do
+      resources :users, only: [:show], controller: 'users/user_profiles' do
         # user_profile route
         resource :user_profile, only: [:show, :update, :destroy], controller: 'users/user_profiles'
         resources :ingredients, only: [:index, :show] #ingredients JSON
@@ -31,16 +31,16 @@ Rails.application.routes.draw do
             get :today
           end
         end
-        resources :disliked_ingredients, only: [:create, :destroy]
-        resources :allergies, only: [:index, :create, :destroy]
-        resources :dietary_preferences, only: [:index, :create, :destroy]
+        resources :disliked_ingredients, only: [:create, :destroy], controller: 'disliked_ingredients'
+        resources :allergies, only: [:index, :create, :destroy], controller: 'allergies'
+        resources :dietary_preferences, only: [:index, :create, :destroy], controller: 'dietary_preferences'
       end
       
       # Ingredients management (global/admin level)
       resources :ingredients, only: [:index, :show, :create, :update, :destroy] do
         collection do
           post :search_nutritionix
-          get :search  # For searching existing ingredients
+          get :search
         end
       end
       
@@ -54,9 +54,6 @@ Rails.application.routes.draw do
 
       resources :health_goals, only: [:index]
 
-      namespace :admin do
-        resources :users, only: [:create, :show, :update, :destroy, :index]
-      end
     end
   end
 end

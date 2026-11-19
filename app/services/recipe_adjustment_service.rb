@@ -51,7 +51,7 @@ class RecipeAdjustmentService
       - Dietary preferences: #{preferences[:dietary_preferences].join(", ")}
       - Allergies: #{preferences[:allergies].join(", ")}
       - Disliked ingredients: #{preferences[:disliked_ingredients].join(", ")}
-      - Health Goal: #{preferences[:health_goals]}
+      - Health Goal: #{preferences[:health_goal]}
       
       Adjust by:
       1. Substituting similar ingredients
@@ -91,31 +91,28 @@ class RecipeAdjustmentService
   def process_adjusted_recipe(original_recipe)
     if original_recipe.is_a?(Hash) && original_recipe["title"]
       adjusted_recipe_data = {
-    "title" => "Adjusted #{original_recipe["title"]}",
-    "instructions" => original_recipe["instructions"],
-    "ingredients" => original_recipe["ingredients"]
-    }
+        "title" => "Adjusted #{original_recipe["title"]}",
+        "instructions" => original_recipe["instructions"],
+        "ingredients" => original_recipe["ingredients"]
+      }
 
-      new_recipe = Recipe.create!(
-        title: adjusted_recipe_data["title"],
-        instructions: adjusted_recipe_data["instructions"],
-        user: @user
-      )
-
-      adjusted_recipe_data["ingredients"].each do |ingredient_data|
+      ingredients = adjusted_recipe_data["ingredients"].map do |ingredient_data|
         ingredient = @nutrition_service.find_or_create_ingredient(ingredient_data["name"], ingredient_data["quantity"], ingredient_data["unit"])
-
-        # Create the link between the new recipe and the ingredient
-        RecipeIngredient.create!(
-          recipe: new_recipe,
-          ingredient: ingredient,
-          quantity: ingredient_data["quantity"],
-          unit: ingredient_data["unit"]
-        )
+        { ingredient: ingredient, quantity: ingredient_data["quantity"], unit: ingredient_data["unit"] }
       end
 
-      nutrition_summary = @nutrition_service.update_recipe_nutrition(new_recipe)
-      new_recipe
+      Recipe.transaction do
+        new_recipe = Recipe.create!(
+          title: adjusted_recipe_data["title"],
+          instructions: adjusted_recipe_data["instructions"],
+          user: @user
+        )
+
+        ingredients.each do |attributes|
+          new_recipe.recipe_ingredients.create!(attributes)
+        end
+        new_recipe
+      end
     else
       Rails.logger.error "Invalid AI response format"
       return nil

@@ -10,4 +10,16 @@ class NutritionixService
       "Content-Type" => "application/json"
     }
   end
+
+  def search_nutritionix(query, quantity: 1, unit: "g")
+    response = HTTParty.post(
+      "#{BASE_URL}/natural/nutrients",
+      headers: @headers,
+      body: { query: "#{quantity} #{unit} of #{query}" }.to_json
+    )
+    response.success? ? response.parsed_response : nil
+  rescue StandardError => error
+    Rails.logger.error("Nutritionix search failed: #{error.message}")
+    nil
+  end
 end
