@@ -42,10 +42,6 @@ class Api::V1::MealPlanRecipesController < ApplicationController
 
   private
   
-  def set_user
-    @user = User.find(params[:user_id])
-  end
-
   def set_meal_plan
     @meal_plan = @user.meal_plans.find_by(id: params[:meal_plan_id])
 

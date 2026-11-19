@@ -8,17 +8,25 @@ class ApplicationController < ActionController::API
 
   protected
 
+  def set_user
+    unless params[:user_id] == current_user.id.to_s
+      render json: { error: "Unauthorized access" }, status: :forbidden
+      return
+    end
+
+    @user = current_user
+  end
+
   def record_not_found
     render json: { error: "Record not found" }, status: :not_found
   end
 
   def configure_permitted_parameters
-    devise_parameter_sanitizer.permit(:sign_up, keys: %i[first_name last_name email password role])
+    devise_parameter_sanitizer.permit(:sign_up, keys: %i[first_name last_name email password])
     devise_parameter_sanitizer.permit(:sign_in, keys: %i[email password])
   end
 
   def authenticate_user!
-    Rails.logger.debug("Authorization Header: #{request.headers['Authorization']}")
     token = request.headers["Authorization"]&.split(" ")&.last
     if token
       begin
@@ -26,7 +34,10 @@ class ApplicationController < ActionController::API
         user_id = decoded_token[0]["sub"]
 
         Rails.logger.debug("Decoded user_id: #{user_id}")
-        @current_user = User.find(user_id)
+        user = User.find(user_id)
+        raise JWT::DecodeError, "Revoked token" if User.jwt_revoked?(decoded_token[0], user)
+
+        @current_user = user
       rescue JWT::DecodeError => e
         render json: { error: 'Invalid token' }, status: :unauthorized
       rescue ActiveRecord::RecordNotFound => e

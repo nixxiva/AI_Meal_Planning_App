@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# PG_ROOT points to an extracted PostgreSQL distribution, not a running cluster.
+: "${PG_ROOT:?Set PG_ROOT to the extracted PostgreSQL package root}"
+export PATH="$PG_ROOT/usr/lib/postgresql/18/bin:$PATH"
+export LD_LIBRARY_PATH="$PG_ROOT/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export APP_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$APP_ROOT"
+command -v initdb >/dev/null
+command -v pg_ctl >/dev/null
+bundle check >/dev/null
+
+scratch="$(mktemp -d /tmp/meal-planner-test.XXXXXX)"
+cleanup() {
+  status=$?
+  if [[ -f "$scratch/data/postmaster.pid" ]]; then
+    pg_ctl -D "$scratch/data" -m immediate -w stop >/dev/null || status=1
+  fi
+  if [[ ! -f "$scratch/data/postmaster.pid" ]]; then
+    rm -rf -- "$scratch"
+    echo "Isolated cluster and credentials removed: $scratch"
+  else
+    echo "Cleanup failed; retained cluster at $scratch" >&2
+    status=1
+  fi
+  exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+export RAILS_ENV=test DISABLE_BOOTSNAP=1 PARALLEL_WORKERS=1
+unset RUBYOPT
+export DATABASE_URL="postgresql:///meal_planner_isolated?host=$scratch&port=55439"
+export ISOLATED_CREDENTIALS="$scratch/credentials.yml.enc"
+export RAILS_MASTER_KEY="$(ruby -rsecurerandom -e 'print SecureRandom.hex(16)')"
+export SECRET_KEY_BASE="$(ruby -rsecurerandom -e 'print SecureRandom.hex(64)')"
+
+initdb -D "$scratch/data" --encoding=UTF8 --no-locale -A trust \
+  -L "$PG_ROOT/usr/share/postgresql/18" >"$scratch/init.log"
+pg_ctl -D "$scratch/data" -l "$scratch/postgres.log" \
+  -o "-k $scratch -p 55439 -c listen_addresses=''" -w start >/dev/null
+createdb -h "$scratch" -p 55439 meal_planner_isolated
+
+bundle exec ruby -ractive_support -ractive_support/encrypted_file -rsecurerandom -ryaml -e '
+  file = ActiveSupport::EncryptedFile.new(content_path: ENV.fetch("ISOLATED_CREDENTIALS"),
+    key_path: "/nonexistent", env_key: "RAILS_MASTER_KEY", raise_if_missing_key: true)
+  file.write({"devise_jwt_secret_key" => SecureRandom.hex(64),
+    "nutritionix" => {"app_id" => "isolated", "app_key" => "isolated"},
+    "openai" => {"api_key" => "isolated"}}.to_yaml)
+'
+cat >"$scratch/bootstrap.rb" <<'RUBY'
+require "net/http"
+Net::HTTP.prepend(Module.new do
+  def connect
+    raise "External HTTP is disabled in isolated tests; stub the provider"
+  end
+end)
+require File.join(ENV.fetch("APP_ROOT"), "config/application")
+Rails.application.config.credentials.content_path = ENV.fetch("ISOLATED_CREDENTIALS")
+Rails.application.config.credentials.key_path = "/nonexistent"
+Rails.application.config.active_record.dump_schema_after_migration = false
+RUBY
+
+echo "Isolated PostgreSQL socket: $scratch; TCP disabled; external HTTP disabled"
+database_task=db:schema:load
+if [[ "${ISOLATED_DB_SETUP:-schema}" == migrate ]]; then
+  database_task=db:migrate
+  export SCHEMA="$scratch/schema.rb"
+fi
+bundle exec ruby -r "$scratch/bootstrap.rb" bin/rails "$database_task"
+if [[ $# -eq 0 ]]; then
+  set -- test/integration/account_ownership_test.rb test/integration/signup_role_test.rb
+fi
+bundle exec ruby -r "$scratch/bootstrap.rb" bin/rails test "$@"

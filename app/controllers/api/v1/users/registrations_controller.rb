@@ -25,7 +25,10 @@ module Api
       end
 
       def sign_up_params
-        params.require(:registration).require(:user).permit(:email, :password, :password_confirmation, :first_name, :last_name, :role)
+        params.require(:registration).require(:user)
+              .except(:role)
+              .permit(:email, :password, :password_confirmation, :first_name, :last_name)
+              .merge(role: User::MEMBER_ROLE)
       end
     end
   end

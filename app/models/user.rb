@@ -1,4 +1,5 @@
 class User < ApplicationRecord
+  MEMBER_ROLE = "member".freeze
 
   include Devise::JWT::RevocationStrategies::JTIMatcher
   # Include default devise modules. Others available are:
@@ -26,6 +27,7 @@ class User < ApplicationRecord
 
   validates :email, presence: true, uniqueness: true
   validates :first_name, :last_name, :role, presence: true
+  validates :role, inclusion: { in: [MEMBER_ROLE, "admin"] }, if: :will_save_change_to_role?
 
   #jti
   before_create :set_jti

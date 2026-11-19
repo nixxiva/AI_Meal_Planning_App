@@ -18,8 +18,14 @@ class Api::V1::RecipesController < ApplicationController
   # POST /api/v1/recipes
   def create
     @recipe = @current_user.recipes.build(recipe_params)
-    if @recipe.save
-      create_recipe_ingredients if recipe_ingredients_params.present?
+    ingredients = prepare_recipe_ingredients
+    saved = Recipe.transaction do
+      if @recipe.save
+        create_recipe_ingredients(ingredients)
+        true
+      end
+    end
+    if saved
       render json: success_response('Recipe created successfully', @recipe)
     else
       render json: { errors: @recipe.errors.full_messages }, status: :unprocessable_entity
@@ -28,8 +34,14 @@ class Api::V1::RecipesController < ApplicationController
 
   # PUT /api/v1/recipes/:id
   def update
-    if @recipe.update(recipe_params)
-      update_recipe_ingredients if recipe_ingredients_params.present?
+    ingredients = prepare_recipe_ingredients
+    saved = Recipe.transaction do
+      if @recipe.update(recipe_params)
+        update_recipe_ingredients(ingredients) if ingredients.present?
+        true
+      end
+    end
+    if saved
       render json: success_response('Recipe updated successfully', @recipe)
     else
       render json: { errors: @recipe.errors.full_messages }, status: :unprocessable_entity
@@ -46,7 +58,7 @@ class Api::V1::RecipesController < ApplicationController
   def rate
     rating = @recipe.ratings.find_or_initialize_by(user: @current_user)
     if rating.update(rating: rating_params[:rating])
-      render json: { status: 'success', message: "Recipe rated successfully", data: rating_data(@recipe) }
+      render json: { status: 'success', message: "Recipe rated successfully", data: recipe_summary_json(@recipe) }
     else
       render json: { status: 'error', errors: rating.errors.full_messages }, status: :unprocessable_entity
     end
@@ -96,25 +108,30 @@ class Api::V1::RecipesController < ApplicationController
   end
 
   def filter_by_ingredient(recipes)
-    recipes.joins(:ingredients).where(ingredients: {name: params[:ingredient]})
+    recipes.joins(:ingredients).where(ingredients: {ingredient_name: params[:ingredient]})
   end
 
   def filter_by_search(recipes)
     recipes.where("title ILIKE ?", "%#{params[:search]}%")
   end
 
-  def create_recipe_ingredients
+  def prepare_recipe_ingredients
+    return [] if recipe_ingredients_params.empty?
+
     nutrition_service = NutritionService.new
-    recipe_ingredients_params.each do |ingredient_data|
+    recipe_ingredients_params.map do |ingredient_data|
       ingredient = nutrition_service.find_or_create_ingredient(ingredient_data[:ingredient_name], ingredient_data[:quantity], ingredient_data[:unit])
-      @recipe.recipe_ingredients.create!(ingredient: ingredient, quantity: ingredient_data[:quantity], unit: ingredient_data[:unit])
+      { ingredient: ingredient, quantity: ingredient_data[:quantity], unit: ingredient_data[:unit] }
     end
-    nutrition_service.update_recipe_nutrition(@recipe)
   end
 
-  def update_recipe_ingredients
+  def create_recipe_ingredients(ingredients)
+    ingredients.each { |attributes| @recipe.recipe_ingredients.create!(attributes) }
+  end
+
+  def update_recipe_ingredients(ingredients)
     @recipe.recipe_ingredients.destroy_all
-    create_recipe_ingredients
+    create_recipe_ingredients(ingredients)
   end
 
   def recipe_summary_json(recipe)
@@ -134,25 +151,14 @@ class Api::V1::RecipesController < ApplicationController
       total_calories: nutrition_data[:total_calories],
       total_protein: nutrition_data[:total_protein],
       total_carbs: nutrition_data[:total_carbs],
-      total_fat: nutrition_data[:total_fat]
+      total_fat: nutrition_data[:total_fat],
+      nutrition_available: nutrition_data[:nutrition_available]
     }
   end
 
   def ingredient_details(ri, nutrition_service)
-    ingredient = ri.ingredient
-    if ingredient && ingredient.calories_per_gram && ingredient.serving_weight_grams
-      total_grams = nutrition_service.get_grams_for_unit(ri.unit) * ri.quantity.to_f
-      total_calories = ingredient.calories_per_gram * total_grams
-      total_protein = ingredient.protein_per_gram * total_grams
-      total_carbs = ingredient.carbs_per_gram * total_grams
-      total_fat = ingredient.fat_per_gram * total_grams
-
-      { ingredient_name: ri.ingredient.ingredient_name, quantity: ri.quantity, unit: ri.unit,
-        total_calories: total_calories, total_protein: total_protein, total_carbs: total_carbs, total_fat: total_fat }
-    else
-      { ingredient_name: ri.ingredient.ingredient_name, quantity: ri.quantity, unit: ri.unit,
-        total_calories: 0, total_protein: 0, total_carbs: 0, total_fat: 0 }
-    end
+    { ingredient_name: ri.ingredient.ingredient_name, quantity: ri.quantity, unit: ri.unit }
+      .merge(nutrition_service.ingredient_nutrition(ri))
   end
 
   def create_or_update_success_response(message, recipe)
@@ -160,15 +166,15 @@ class Api::V1::RecipesController < ApplicationController
   end
 
   def success_response(message, recipe)
-    nutrition_service = NutritionService.new
-    nutrition_data = nutrition_service.update_recipe_nutrition(recipe)
+    details = detailed_recipe_json(recipe)
     { status: 'success', message: message,
       data: {
-        adjusted_recipe: detailed_recipe_json(recipe),
-        total_calories: nutrition_data[:total_calories],
-        total_protein: nutrition_data[:total_protein],
-        total_fat: nutrition_data[:total_fat],
-        total_carbs: nutrition_data[:total_carbs]
+        adjusted_recipe: details,
+        total_calories: details[:total_calories],
+        total_protein: details[:total_protein],
+        total_fat: details[:total_fat],
+        total_carbs: details[:total_carbs],
+        nutrition_available: details[:nutrition_available]
       }
     }
   end

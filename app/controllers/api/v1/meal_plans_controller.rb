@@ -52,15 +52,19 @@ class Api::V1::MealPlansController < ApplicationController
 
   private
 
-  def set_user
-    @user = User.find(params[:user_id])
-  end
-
   def meal_plan_params
     params.require(:meal_plan).permit(:start_date, :end_date)
   end
 
   def meal_plan_json(meal_plan)
+    pantry_names = @user.pantry_items.pluck(:name).map { |name| name.to_s.strip.downcase }
+    restrictions = {
+      allergies: @user.allergies.pluck(:allergy_name),
+      disliked_ingredients: @user.disliked_ingredients.pluck(:ingredient_name),
+      dietary_preferences: @user.dietary_preferences.pluck(:pref_name)
+    }
+    suggestions = {}
+    suggestion_service = RecipeSuggestionService.new
     meal_plan.as_json(
       include: {
         meal_plan_recipes: {
@@ -78,10 +82,15 @@ class Api::V1::MealPlansController < ApplicationController
     ).tap do |json|
       json["meal_plan_recipes"].each do |mpr|
         mpr["recipe"]["recipe_ingredients"].each do |ri|
-          ing_name = ri["ingredient"]["ingredient_name"]
-          pantry_item = @user.pantry_items.find_by(name: ing_name)
-          ri["from_pantry"] = pantry_item.present?
-          ri["substitute"] = pantry_item.present? ? nil : RecipeSuggestionService.new.suggest_substitute(ing_name)
+          ing_name = ri["ingredient"]["ingredient_name"].strip.downcase
+          ri["from_pantry"] = pantry_names.include?(ing_name)
+          ri["substitute"] = if ri["from_pantry"]
+            nil
+          else
+            suggestions.fetch(ing_name) do
+              suggestions[ing_name] = suggestion_service.suggest_substitute(ing_name, **restrictions)
+            end
+          end
         end
       end
     end
