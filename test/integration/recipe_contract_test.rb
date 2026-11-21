@@ -20,11 +20,11 @@ class RecipeContractTest < ActionDispatch::IntegrationTest
     other = @user.recipes.create!(title: "Soup", instructions: "Boil")
     get "/api/v1/recipes", params: { ingredient: "rice" }, headers: @headers
     assert_response :success
-    assert_equal [@recipe.id], response.parsed_body.dig("data", "recipes").map { |recipe| recipe["id"] }
+    assert_equal [ @recipe.id ], response.parsed_body.dig("data", "recipes").map { |recipe| recipe["id"] }
 
     get "/api/v1/recipes", headers: @headers
     assert_response :success
-    assert_equal [@recipe.id, other.id].sort, response.parsed_body.dig("data", "recipes").map { |recipe| recipe["id"] }.sort
+    assert_equal [ @recipe.id, other.id ].sort, response.parsed_body.dig("data", "recipes").map { |recipe| recipe["id"] }.sort
   end
 
   test "rating returns its saved aggregate and rerating updates the existing rating" do

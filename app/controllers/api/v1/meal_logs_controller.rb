@@ -1,8 +1,8 @@
 class Api::V1::MealLogsController < ApplicationController
   before_action :authenticate_user!
   before_action :set_user, only: :index
-  before_action :set_meal_log, only: [:update, :destroy]
-  before_action :load_today_logs, only: [:today, :today_totals]
+  before_action :set_meal_log, only: [ :update, :destroy ]
+  before_action :load_today_logs, only: [ :today, :today_totals ]
 
   # GET /users/:user_id/meal_logs/today_totals
   def today_totals
@@ -60,11 +60,11 @@ class Api::V1::MealLogsController < ApplicationController
     rescue ActiveRecord::RecordNotFound
     render json: { success: false, error: "Meal log not found" }, status: :not_found
   end
-  
+
   def meal_log_params
     params.require(:meal_log).permit(:recipe_id, :quantity, :date)
   end
-  
+
   def load_today_logs
     @today_logs = current_user.meal_logs.includes(recipe: { recipe_ingredients: :ingredient }).where(date: Date.today)
     errors = @today_logs.reject(&:valid?).flat_map do |log|
@@ -85,7 +85,7 @@ class Api::V1::MealLogsController < ApplicationController
     end
     totals.merge(nutrition_available: true)
   end
-  
+
   def calculate_today_meals(logs)
     logs.map do |log|
       {

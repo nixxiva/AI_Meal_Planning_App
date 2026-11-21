@@ -148,7 +148,7 @@ class NutritionAvailabilityTest < ActionDispatch::IntegrationTest
   end
 
   def provider_food(weight:, calories:)
-    { "foods" => [{ "serving_weight_grams" => weight, "nf_calories" => calories,
-      "nf_protein" => 0, "nf_total_fat" => 0, "nf_total_carbohydrate" => 0 }] }
+    { "foods" => [ { "serving_weight_grams" => weight, "nf_calories" => calories,
+      "nf_protein" => 0, "nf_total_fat" => 0, "nf_total_carbohydrate" => 0 } ] }
   end
 end

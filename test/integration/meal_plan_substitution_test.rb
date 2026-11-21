@@ -22,7 +22,7 @@ class MealPlanSubstitutionTest < ActionDispatch::IntegrationTest
   test "generation keeps response fields and requests one restricted suggestion per missing ingredient" do
     generate_with_substitute("Broccoli")
     assert_response :success
-    assert_equal ["carrot"], @suggestion_calls
+    assert_equal [ "carrot" ], @suggestion_calls
     assert_equal 1, @substitution_prompts.length
     assert_includes @substitution_prompts.first, "Peanut"
     assert_includes @substitution_prompts.first, "Celery"
@@ -42,7 +42,7 @@ class MealPlanSubstitutionTest < ActionDispatch::IntegrationTest
   end
 
   test "known allergy and disliked suggestions are withheld after normalizing case and whitespace" do
-    [" PEANUT ", " celery "].each do |suggestion|
+    [ " PEANUT ", " celery " ].each do |suggestion|
       generate_with_substitute(suggestion)
       assert_response :success
       assert response_ingredients.all? { |ingredient| ingredient.fetch("substitute").nil? }
@@ -52,7 +52,7 @@ class MealPlanSubstitutionTest < ActionDispatch::IntegrationTest
   test "blank suggestions remain unavailable without repeated provider requests" do
     generate_with_substitute("  ")
     assert_response :success
-    assert_equal ["carrot"], @suggestion_calls
+    assert_equal [ "carrot" ], @suggestion_calls
     assert response_ingredients.all? { |ingredient| ingredient.fetch("substitute").nil? }
   end
 
@@ -61,7 +61,7 @@ class MealPlanSubstitutionTest < ActionDispatch::IntegrationTest
       generate_with_substitute(StandardError.new("Synthetic provider failure"))
       assert_response :success
     end
-    assert_equal ["carrot"], @suggestion_calls
+    assert_equal [ "carrot" ], @suggestion_calls
     assert_equal 3, response.parsed_body.fetch("meal_plan_recipes").length
     assert response_ingredients.all? { |ingredient| ingredient.fetch("substitute").nil? }
   end
@@ -69,7 +69,7 @@ class MealPlanSubstitutionTest < ActionDispatch::IntegrationTest
   test "the AI adapter empty response sentinel remains unavailable" do
     generate_with_substitute("[]")
     assert_response :success
-    assert_equal ["carrot"], @suggestion_calls
+    assert_equal [ "carrot" ], @suggestion_calls
     assert response_ingredients.all? { |ingredient| ingredient.fetch("substitute").nil? }
   end
 

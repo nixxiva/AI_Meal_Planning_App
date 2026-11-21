@@ -1,7 +1,7 @@
 class RecipeSuggestionService
   def suggest_substitute(missing_ingredient, allergies:, disliked_ingredients:, dietary_preferences:)
     prompt = <<~PROMPT
-      Suggest one practical substitute for the ingredient "#{missing_ingredient}" 
+      Suggest one practical substitute for the ingredient "#{missing_ingredient}"#{' '}
       that can be used in everyday cooking.
       Allergies: #{allergies.join(", ")}
       Disliked ingredients: #{disliked_ingredients.join(", ")}

@@ -17,8 +17,8 @@ class MealLogIndexTest < ActionDispatch::IntegrationTest
 
     get path(@owner), headers: auth_headers(@owner), as: :json
     assert_response :success
-    assert_equal [newer.id, older.id], response.parsed_body.map { |log| log.fetch("id") }
-    assert_equal [2.0, 1.0], response.parsed_body.map { |log| log.fetch("quantity") }
+    assert_equal [ newer.id, older.id ], response.parsed_body.map { |log| log.fetch("id") }
+    assert_equal [ 2.0, 1.0 ], response.parsed_body.map { |log| log.fetch("quantity") }
   end
 
   test "index rejects a URL for another account and requires authentication" do

@@ -15,13 +15,13 @@ class IngredientEndpointsTest < ActionDispatch::IntegrationTest
     Ingredient.create!(ingredient_name: "rice 100%", serving_weight_grams: 20)
     get "/api/v1/ingredients/search", params: { query: "RICE" }
     assert_response :success, response.body
-    assert_equal ["brown rice", "rice 100%"], response.parsed_body.map { |row| row.fetch("ingredient_name") }
+    assert_equal [ "brown rice", "rice 100%" ], response.parsed_body.map { |row| row.fetch("ingredient_name") }
     assert_equal %w[id ingredient_name calories_per_gram protein_per_gram carbs_per_gram fat_per_gram serving_weight_grams].sort,
       response.parsed_body.first.keys.sort
 
     get "/api/v1/ingredients/search", params: { query: "%" }
     assert_response :success
-    assert_equal ["rice 100%"], response.parsed_body.map { |row| row.fetch("ingredient_name") }
+    assert_equal [ "rice 100%" ], response.parsed_body.map { |row| row.fetch("ingredient_name") }
   end
 
   test "local search requires a query" do
@@ -34,16 +34,16 @@ class IngredientEndpointsTest < ActionDispatch::IntegrationTest
     service = Object.new
     calls = []
     service.define_singleton_method(:search_nutritionix) do |query, quantity:, unit:|
-      calls << [query, quantity, unit]
-      { "foods" => [{ "food_name" => "rice", "serving_weight_grams" => 100, "nf_calories" => 130,
-        "nf_protein" => 2, "nf_total_fat" => 1, "nf_total_carbohydrate" => 28, "internal" => "hidden" }] }
+      calls << [ query, quantity, unit ]
+      { "foods" => [ { "food_name" => "rice", "serving_weight_grams" => 100, "nf_calories" => 130,
+        "nf_protein" => 2, "nf_total_fat" => 1, "nf_total_carbohydrate" => 28, "internal" => "hidden" } ] }
     end
     NutritionixService.stub(:new, service) do
       post "/api/v1/ingredients/search_nutritionix", params: { query: "rice", quantity: 100, unit: "g" },
         headers: auth_headers(@user), as: :json
     end
     assert_response :success
-    assert_equal [["rice", 100.0, "g"]], calls
+    assert_equal [ [ "rice", 100.0, "g" ] ], calls
     assert_equal "rice", response.parsed_body.dig("foods", 0, "food_name")
     refute response.body.include?("internal")
     assert_equal 1, Ingredient.count

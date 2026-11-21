@@ -4,10 +4,10 @@ class Api::V1::MealPlansController < ApplicationController
 
   # GET /api/v1/users/:user_id/meal_plans
   def index
-    meal_plans = @user.meal_plans.includes(meal_plan_recipes: { recipe: { recipe_ingredients: :ingredient}})
-    render json: meal_plans.to_json(include: { meal_plan_recipes: { include: {recipe: {include: {recipe_ingredients: {include: :ingredient} } }}}})
+    meal_plans = @user.meal_plans.includes(meal_plan_recipes: { recipe: { recipe_ingredients: :ingredient } })
+    render json: meal_plans.to_json(include: { meal_plan_recipes: { include: { recipe: { include: { recipe_ingredients: { include: :ingredient } } } } } })
   end
-  
+
   # POST /api/v1/users/:user_id/meal_plans
   def create
     meal_plan = @user.meal_plans.build(meal_plan_params)
@@ -24,7 +24,7 @@ class Api::V1::MealPlansController < ApplicationController
     meal_plan = @user.meal_plans.find_by(id: params[:id])
 
     if meal_plan
-      render json: { status: 'success', data: meal_plan }, status: :ok
+      render json: { status: "success", data: meal_plan }, status: :ok
     else
       render json: { error: "Meal plan doesn't exist" }, status: :not_found
     end
@@ -36,7 +36,7 @@ class Api::V1::MealPlansController < ApplicationController
 
     if meal_plan
       meal_plan.destroy
-      render json: { status: 'success', message: "Meal plan deleted successfully" }, status: :ok
+      render json: { status: "success", message: "Meal plan deleted successfully" }, status: :ok
     else
       render json: { error: "Meal plan not found" }, status: :not_found
     end

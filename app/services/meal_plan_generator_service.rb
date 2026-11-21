@@ -88,11 +88,9 @@ class MealPlanGeneratorService
       meal_plan = @user.meal_plans.create!(start_date: Date.today, end_date: Date.today)
       meal_plan_data.each_with_index do |meal, index|
         recipe_data = meal["recipe"]
-        recipe = @user.recipes.find_or_create_by!(title: recipe_data["title"]) do |r|
-          r.instructions = recipe_data["instructions"]
-        end
+        recipe = @user.recipes.create!(title: recipe_data["title"], instructions: recipe_data["instructions"])
         prepared_ingredients[index].each do |attributes|
-          RecipeIngredient.find_or_create_by!(attributes.merge(recipe: recipe))
+          recipe.recipe_ingredients.find_or_create_by!(attributes)
         end
         MealPlanRecipe.create!(meal_plan: meal_plan, recipe: recipe, meal_type: meal["meal_type"].downcase)
       end

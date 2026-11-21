@@ -20,17 +20,17 @@ class NutritionService
   def fetch_nutrition_data(query, quantity, unit)
     formatted_query = "#{quantity} #{unit} of #{query}"
     Rails.logger.info "Nutritionix API Request: #{formatted_query}"
-    
+
     begin
       response = HTTParty.post(
         "#{BASE_URL}/natural/nutrients",
         headers: @headers,
         body: { query: formatted_query }.to_json
       )
-      
+
       Rails.logger.info "Nutritionix API Response Status: #{response.code}"
       Rails.logger.info "Nutritionix API Response Body: #{response.body}"
-      
+
       if response.success?
         response.parsed_response
       else
@@ -55,7 +55,7 @@ class NutritionService
       available = nonnegative_number?(weight) && weight.positive? &&
         NUTRIENT_FIELDS.values.all? { |field| nonnegative_number?(food[field]) && (food[field].to_f / weight).finite? }
       attributes = NUTRIENT_FIELDS.to_h do |nutrient, field|
-        ["#{nutrient}_per_gram", available ? food[field].to_f / weight : nil]
+        [ "#{nutrient}_per_gram", available ? food[field].to_f / weight : nil ]
       end
       ingredient.update!(attributes.merge("serving_weight_grams" => available ? weight : nil))
     end
@@ -83,7 +83,7 @@ class NutritionService
 
     grams = grams_per_unit * quantity
     totals = NUTRIENT_FIELDS.keys.to_h do |nutrient|
-      ["total_#{nutrient}".to_sym, ingredient.public_send("#{nutrient}_per_gram") * grams]
+      [ "total_#{nutrient}".to_sym, ingredient.public_send("#{nutrient}_per_gram") * grams ]
     end
     return unavailable_nutrition unless totals.values.all?(&:finite?)
 
@@ -92,13 +92,13 @@ class NutritionService
 
   def get_grams_for_unit(unit)
     case unit.to_s.downcase.strip
-    when 'g', 'gram', 'grams'
+    when "g", "gram", "grams"
       1.0
-    when 'kg', 'kilogram', 'kilograms'  
+    when "kg", "kilogram", "kilograms"
       1000.0
-    when 'lb', 'pound', 'pounds'
+    when "lb", "pound", "pounds"
       453.59
-    when 'oz', 'ounce', 'ounces'
+    when "oz", "ounce", "ounces"
       28.35
     else
       nil
