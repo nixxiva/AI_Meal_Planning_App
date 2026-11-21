@@ -53,7 +53,7 @@ class NutritionConsistencyTest < ActionDispatch::IntegrationTest
     user.save!
     recipe = user.recipes.create!(title: "#{name} rice", instructions: "Cook")
     recipe.recipe_ingredients.create!(ingredient: @ingredient, quantity: grams, unit: "g")
-    [user, recipe]
+    [ user, recipe ]
   end
 
   def auth_headers(user)

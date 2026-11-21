@@ -1,7 +1,7 @@
 class Api::V1::IngredientsController < ApplicationController
-  before_action :authenticate_admin!, only: [:create, :update, :destroy]
+  before_action :authenticate_admin!, only: [ :create, :update, :destroy ]
   before_action :authenticate_user!, only: :search_nutritionix
-  before_action :set_ingredient, only: [:update, :destroy]
+  before_action :set_ingredient, only: [ :update, :destroy ]
 
   def index
     render json: Ingredient.order(:ingredient_name, :id).map { |ingredient| ingredient_json(ingredient) }
@@ -13,7 +13,7 @@ class Api::V1::IngredientsController < ApplicationController
 
   def search
     query = params[:query].to_s.strip
-    return render(json: { errors: ["query is required"] }, status: :bad_request) if query.empty?
+    return render(json: { errors: [ "query is required" ] }, status: :bad_request) if query.empty?
 
     matches = Ingredient.where("ingredient_name ILIKE ?", "%#{ActiveRecord::Base.sanitize_sql_like(query)}%")
       .order(:ingredient_name, :id)
@@ -25,7 +25,7 @@ class Api::V1::IngredientsController < ApplicationController
     quantity = Float(params[:quantity].presence || 1, exception: false)
     unit = params[:unit].presence || "g"
     unless query.present? && query.length <= 200 && quantity&.finite? && quantity.positive? && unit.is_a?(String) && unit.length <= 32
-      return render json: { errors: ["query, positive quantity, and unit are required"] }, status: :unprocessable_entity
+      return render json: { errors: [ "query, positive quantity, and unit are required" ] }, status: :unprocessable_entity
     end
 
     result = NutritionixService.new.search_nutritionix(query, quantity: quantity, unit: unit)
@@ -93,7 +93,7 @@ class Api::V1::IngredientsController < ApplicationController
       number = Float(value, exception: false)
       valid = number&.finite? && (field == "serving_weight_grams" ? number.positive? : number >= 0)
       unless valid
-        render json: { errors: ["#{field} must be a finite positive weight or a finite nonnegative value"] }, status: :unprocessable_entity
+        render json: { errors: [ "#{field} must be a finite positive weight or a finite nonnegative value" ] }, status: :unprocessable_entity
         return false
       end
     end

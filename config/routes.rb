@@ -2,58 +2,57 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       devise_for :users,
-                 path: '',
+                 path: "",
                  path_names: {
-                   sign_in: 'login',
-                   sign_out: 'logout',
-                   registration: 'signup'
+                   sign_in: "login",
+                   sign_out: "logout",
+                   registration: "signup"
                  },
                  controllers: {
-                   sessions: 'api/v1/users/sessions',
-                   registrations: 'api/v1/users/registrations',
-                   confirmations: 'api/v1/users/confirmations'
+                   sessions: "api/v1/users/sessions",
+                   registrations: "api/v1/users/registrations",
+                   confirmations: "api/v1/users/confirmations"
                  }
-      
-      resources :users, only: [:show], controller: 'users/user_profiles' do
+
+      resources :users, only: [ :show ], controller: "users/user_profiles" do
         # user_profile route
-        resource :user_profile, only: [:show, :update, :destroy], controller: 'users/user_profiles'
-        resources :ingredients, only: [:index, :show] #ingredients JSON
-        resources :pantry_items, only: [:index, :create, :update, :destroy]
-        resources :meal_plans, only: [:index, :create, :show, :destroy] do #endpoint for generate meal
+        resource :user_profile, only: [ :show, :update, :destroy ], controller: "users/user_profiles"
+        resources :ingredients, only: [ :index, :show ] # ingredients JSON
+        resources :pantry_items, only: [ :index, :create, :update, :destroy ]
+        resources :meal_plans, only: [ :index, :create, :show, :destroy ] do # endpoint for generate meal
           collection do
             post :generate
           end
-          resources :meal_plan_recipes, only: [:create, :destroy]
+          resources :meal_plan_recipes, only: [ :create, :destroy ]
         end
-        resources :meal_logs, only: [:index, :create, :update, :destroy] do
+        resources :meal_logs, only: [ :index, :create, :update, :destroy ] do
           collection do
             get :today_totals
             get :today
           end
         end
-        resources :disliked_ingredients, only: [:create, :destroy], controller: 'disliked_ingredients'
-        resources :allergies, only: [:index, :create, :destroy], controller: 'allergies'
-        resources :dietary_preferences, only: [:index, :create, :destroy], controller: 'dietary_preferences'
+        resources :disliked_ingredients, only: [ :create, :destroy ], controller: "disliked_ingredients"
+        resources :allergies, only: [ :index, :create, :destroy ], controller: "allergies"
+        resources :dietary_preferences, only: [ :index, :create, :destroy ], controller: "dietary_preferences"
       end
-      
+
       # Ingredients management (global/admin level)
-      resources :ingredients, only: [:index, :show, :create, :update, :destroy] do
+      resources :ingredients, only: [ :index, :show, :create, :update, :destroy ] do
         collection do
           post :search_nutritionix
           get :search
         end
       end
-      
+
       # Non-nested
-      resources :recipes, only: [:index, :show, :update, :create, :destroy] do
+      resources :recipes, only: [ :index, :show, :update, :create, :destroy ] do
         member do
           post :rate
           post :adjust
         end
       end
 
-      resources :health_goals, only: [:index]
-
+      resources :health_goals, only: [ :index ]
     end
   end
 end

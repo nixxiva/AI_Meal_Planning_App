@@ -3,8 +3,8 @@ module Api
     module Users
       class UserProfilesController < ApplicationController
         before_action :authenticate_user!
-        before_action :set_user, only: [:show, :update, :destroy]
-        before_action :require_confirmed_user, only: [:show, :update]
+        before_action :set_user, only: [ :show, :update, :destroy ]
+        before_action :require_confirmed_user, only: [ :show, :update ]
 
         def show
           render json: profile_json
@@ -20,7 +20,7 @@ module Api
 
         def destroy
           @user.destroy
-          render json: {message: "User successfully deleted"}
+          render json: { message: "User successfully deleted" }
         end
 
         private
@@ -50,13 +50,13 @@ module Api
 
         def user_profile_params
           params.require(:user).permit(
-            :first_name, 
-            :last_name, 
-            :email, 
+            :first_name,
+            :last_name,
+            :email,
             :health_goal_id,
-            allergies_attributes: [:id, :allergy_name, :ingredient_name, :_destroy],
-            disliked_ingredients_attributes: [:id, :ingredient_name, :_destroy],
-            dietary_preferences_attributes: [:id, :pref_name, :_destroy]
+            allergies_attributes: [ :id, :allergy_name, :ingredient_name, :_destroy ],
+            disliked_ingredients_attributes: [ :id, :ingredient_name, :_destroy ],
+            dietary_preferences_attributes: [ :id, :pref_name, :_destroy ]
           )
         end
       end

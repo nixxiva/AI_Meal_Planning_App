@@ -1,7 +1,7 @@
 class Api::V1::PantryItemsController < ApplicationController
   before_action :authenticate_user!
   before_action :set_user
-  before_action :set_pantry_item, only: [:update, :destroy]
+  before_action :set_pantry_item, only: [ :update, :destroy ]
 
   # GET /api/v1/users/:user_id/pantry_items
   def index
@@ -31,7 +31,7 @@ class Api::V1::PantryItemsController < ApplicationController
     )
 
     if pantry_item.save
-      render json: pantry_item.as_json(include: { ingredient: { only: [:ingredient_name] } }), status: :created
+      render json: pantry_item.as_json(include: { ingredient: { only: [ :ingredient_name ] } }), status: :created
     else
       render json: { error: pantry_item.errors.full_messages }, status: :unprocessable_entity
     end
@@ -46,7 +46,7 @@ class Api::V1::PantryItemsController < ApplicationController
     end
 
     update_attributes = pantry_item_params.compact
-    
+
     # Check if the ingredient name is being updated.
     if update_attributes[:name].present? && update_attributes[:name] != @pantry_item.name
       new_ingredient = NutritionService.new.find_or_create_ingredient(
@@ -55,7 +55,7 @@ class Api::V1::PantryItemsController < ApplicationController
         update_attributes[:quantity] || @pantry_item.quantity,
         update_attributes[:unit] || @pantry_item.unit
       )
-      
+
       unless new_ingredient
         render json: { error: "New ingredient not found or nutritional data unavailable." }, status: :unprocessable_entity
         return
@@ -63,7 +63,7 @@ class Api::V1::PantryItemsController < ApplicationController
 
       update_attributes[:ingredient_id] = new_ingredient.id
     end
-    
+
     if @pantry_item.update(update_attributes)
       render json: @pantry_item, status: :ok
     else

@@ -20,9 +20,9 @@ class MealTypeStorageTest < ActiveSupport::TestCase
   test "forward migration preserves named numeric and null legacy meal types" do
     connection = ActiveRecord::Base.connection
     connection.change_column :meal_plan_recipes, :meal_type, :string
-    records = insert_legacy_meals(["breakfast", "lunch", "dinner", "0", "1", "2", nil])
+    records = insert_legacy_meals([ "breakfast", "lunch", "dinner", "0", "1", "2", nil ])
     NormalizeMealPlanRecipeMealType.new.migrate(:up)
-    assert_equal [0, 1, 2, 0, 1, 2, nil], records.map { |id| connection.select_value("SELECT meal_type FROM meal_plan_recipes WHERE id = #{id}") }
+    assert_equal [ 0, 1, 2, 0, 1, 2, nil ], records.map { |id| connection.select_value("SELECT meal_type FROM meal_plan_recipes WHERE id = #{id}") }
     NormalizeMealPlanRecipeMealType.new.migrate(:up)
     assert_equal :integer, connection.columns(:meal_plan_recipes).find { |column| column.name == "meal_type" }.type
   ensure
@@ -32,7 +32,7 @@ class MealTypeStorageTest < ActiveSupport::TestCase
   test "forward migration refuses unknown values without changing them" do
     connection = ActiveRecord::Base.connection
     connection.change_column :meal_plan_recipes, :meal_type, :string
-    id = insert_legacy_meals(["snack"]).first
+    id = insert_legacy_meals([ "snack" ]).first
     assert_raises(ActiveRecord::MigrationError) { NormalizeMealPlanRecipeMealType.new.migrate(:up) }
     assert_equal "snack", connection.select_value("SELECT meal_type FROM meal_plan_recipes WHERE id = #{id}")
     assert_equal :string, connection.columns(:meal_plan_recipes).find { |column| column.name == "meal_type" }.type

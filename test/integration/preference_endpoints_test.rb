@@ -4,9 +4,9 @@ class PreferenceEndpointsTest < ActionDispatch::IntegrationTest
   self.fixture_table_names = []
 
   RESOURCES = [
-    [:allergies, :allergy, :allergy_name, true],
-    [:dietary_preferences, :dietary_preference, :pref_name, true],
-    [:disliked_ingredients, :disliked_ingredient, :ingredient_name, false]
+    [ :allergies, :allergy, :allergy_name, true ],
+    [ :dietary_preferences, :dietary_preference, :pref_name, true ],
+    [ :disliked_ingredients, :disliked_ingredient, :ingredient_name, false ]
   ].freeze
 
   setup do
@@ -32,7 +32,7 @@ class PreferenceEndpointsTest < ActionDispatch::IntegrationTest
 
     test "#{collection} rejects blank and duplicate names without saving" do
       @owner.public_send(collection).create!(field => "Existing")
-      ["", "   ", "Existing"].each do |name|
+      [ "", "   ", "Existing" ].each do |name|
         assert_no_difference -> { @owner.public_send(collection).count } do
           post path(@owner, collection), params: { envelope => { field => name } }, headers: auth_headers(@owner), as: :json
           assert_response :unprocessable_entity
@@ -58,7 +58,7 @@ class PreferenceEndpointsTest < ActionDispatch::IntegrationTest
       assert_equal @other.id, record.reload.user_id
     end
 
-    actions = listable ? [:get, :post, :delete] : [:post, :delete]
+    actions = listable ? [ :get, :post, :delete ] : [ :post, :delete ]
     actions.each do |action|
       test "#{collection} #{action} rejects another users URL" do
         record = @other.public_send(collection).create!(field => "Foreign")
@@ -72,7 +72,7 @@ class PreferenceEndpointsTest < ActionDispatch::IntegrationTest
         assert_equal @other.id, record.user_id
       end
 
-      [:missing, :unconfirmed].each do |identity|
+      [ :missing, :unconfirmed ].each do |identity|
         test "#{collection} #{action} rejects #{identity} authentication" do
           user = identity == :unconfirmed ? @unconfirmed : @owner
           record = user.public_send(collection).create!(field => "Existing")
@@ -95,8 +95,8 @@ class PreferenceEndpointsTest < ActionDispatch::IntegrationTest
         get path(@owner, collection), headers: auth_headers(@owner), as: :json
         assert_response :success
         assert_kind_of Array, response.parsed_body
-        assert_equal [owned.id], response.parsed_body.map { |record| record.fetch("id") }
-        assert_equal ["Owned"], response.parsed_body.map { |record| record.fetch(field.to_s) }
+        assert_equal [ owned.id ], response.parsed_body.map { |record| record.fetch("id") }
+        assert_equal [ "Owned" ], response.parsed_body.map { |record| record.fetch(field.to_s) }
       end
     end
   end

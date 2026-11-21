@@ -1,18 +1,28 @@
+require "bigdecimal"
+
 class Api::V1::RecipesController < ApplicationController
+  NUTRITION_TARGET_TOTALS = {
+    target_calories: :total_calories,
+    target_protein: :total_protein,
+    target_carbs: :total_carbs,
+    target_fat: :total_fat
+  }.freeze
+  NUTRITION_TARGET_TOLERANCE = BigDecimal("0.02")
+
   before_action :authenticate_user!
-  before_action :set_recipe, only: [:show, :rate, :adjust, :update, :destroy]
-  before_action :check_recipe_ownership, only: [:update, :destroy, :adjust]
+  before_action :set_recipe, only: [ :show, :rate, :adjust, :update, :destroy ]
+  before_action :check_recipe_ownership, only: [ :update, :destroy, :adjust ]
 
   # GET /api/v1/recipes
   def index
     @recipes = @current_user.recipes.includes(:recipe_ingredients, :ingredients, :ratings)
     @recipes = filter_recipes(@recipes)
-    render json: { data: { recipes: @recipes.map { |recipe| recipe_summary_json(recipe) }, total: @recipes.count }}
+    render json: { data: { recipes: @recipes.map { |recipe| recipe_summary_json(recipe) }, total: @recipes.count } }
   end
 
   # GET /api/v1/recipes/:id
   def show
-    render json: { data: { recipe: detailed_recipe_json(@recipe) }}
+    render json: { data: { recipe: detailed_recipe_json(@recipe) } }
   end
 
   # POST /api/v1/recipes
@@ -26,7 +36,7 @@ class Api::V1::RecipesController < ApplicationController
       end
     end
     if saved
-      render json: success_response('Recipe created successfully', @recipe)
+      render json: success_response("Recipe created successfully", @recipe)
     else
       render json: { errors: @recipe.errors.full_messages }, status: :unprocessable_entity
     end
@@ -42,7 +52,7 @@ class Api::V1::RecipesController < ApplicationController
       end
     end
     if saved
-      render json: success_response('Recipe updated successfully', @recipe)
+      render json: success_response("Recipe updated successfully", @recipe)
     else
       render json: { errors: @recipe.errors.full_messages }, status: :unprocessable_entity
     end
@@ -51,38 +61,47 @@ class Api::V1::RecipesController < ApplicationController
   # DELETE /api/v1/recipes/:id
   def destroy
     @recipe.destroy
-    render json: { status: 'success', message: 'Recipe deleted successfully' }
+    render json: { status: "success", message: "Recipe deleted successfully" }
   end
 
   # POST /api/v1/recipes/:id/rate
   def rate
     rating = @recipe.ratings.find_or_initialize_by(user: @current_user)
     if rating.update(rating: rating_params[:rating])
-      render json: { status: 'success', message: "Recipe rated successfully", data: recipe_summary_json(@recipe) }
+      render json: { status: "success", message: "Recipe rated successfully", data: recipe_summary_json(@recipe) }
     else
-      render json: { status: 'error', errors: rating.errors.full_messages }, status: :unprocessable_entity
+      render json: { status: "error", errors: rating.errors.full_messages }, status: :unprocessable_entity
     end
   end
 
   # POST /api/v1/recipes/:id/adjust
   def adjust
     target_nutrition = nutrition_params
+    unless target_nutrition
+      return render json: { status: "error", message: "Nutrition targets must be finite, nonnegative numbers" },
+        status: :unprocessable_entity
+    end
+
     adjusted_recipe = RecipeAdjustmentService.new(@recipe, @current_user).adjust_recipe(target_nutrition)
-    render json: success_response('Recipe adjusted successfully', adjusted_recipe)
+    result = success_response("Recipe adjusted successfully", adjusted_recipe)
+    if target_nutrition.present?
+      result[:data][:target_status] = adjustment_target_status(target_nutrition, result[:data])
+    end
+    render json: result
   rescue => e
     Rails.logger.error "Recipe adjustment error: #{e.message}"
-    render json: { status: 'error', message: 'Failed to adjust recipe' }, status: :unprocessable_entity
+    render json: { status: "error", message: "Failed to adjust recipe" }, status: :unprocessable_entity
   end
 
   private
 
   def set_recipe
     @recipe = Recipe.find_by(id: params[:id])
-    render json: { status: 'error', message: "Recipe not found" }, status: :not_found unless @recipe
+    render json: { status: "error", message: "Recipe not found" }, status: :not_found unless @recipe
   end
 
   def check_recipe_ownership
-    render json: { status: 'error', message: "Unauthorized access" }, status: :forbidden unless @recipe.user == @current_user
+    render json: { status: "error", message: "Unauthorized access" }, status: :forbidden unless @recipe.user == @current_user
   end
 
   def recipe_params
@@ -90,7 +109,7 @@ class Api::V1::RecipesController < ApplicationController
   end
 
   def recipe_ingredients_params
-    params.require(:recipe).permit(recipe_ingredients: [:ingredient_name, :quantity, :unit])[:recipe_ingredients] || []
+    params.require(:recipe).permit(recipe_ingredients: [ :ingredient_name, :quantity, :unit ])[:recipe_ingredients] || []
   end
 
   def rating_params
@@ -98,7 +117,32 @@ class Api::V1::RecipesController < ApplicationController
   end
 
   def nutrition_params
-    params.permit(:target_calories, :target_protein, :target_carbs, :target_fat)
+    NUTRITION_TARGET_TOTALS.each_key.with_object({}) do |key, targets|
+      next unless params.key?(key)
+
+      value = params[key]
+      return unless value.is_a?(Numeric) || value.is_a?(String)
+
+      target = BigDecimal(value.to_s, exception: false)
+      return unless target&.finite? && target >= 0
+
+      numeric = target.to_f
+      return unless numeric.finite? && (target.zero? || numeric.positive?)
+
+      targets[key] = target
+    end
+  end
+
+  def adjustment_target_status(targets, nutrition)
+    return "unavailable" unless nutrition.fetch(:nutrition_available)
+
+    matches = targets.map do |key, target|
+      total = BigDecimal(nutrition.fetch(NUTRITION_TARGET_TOTALS.fetch(key)).to_s, exception: false)
+      return "unavailable" unless total&.finite?
+
+      (total - target).abs <= target * NUTRITION_TARGET_TOLERANCE
+    end
+    matches.all? ? "met" : "missed"
   end
 
   def filter_recipes(recipes)
@@ -108,7 +152,7 @@ class Api::V1::RecipesController < ApplicationController
   end
 
   def filter_by_ingredient(recipes)
-    recipes.joins(:ingredients).where(ingredients: {ingredient_name: params[:ingredient]})
+    recipes.joins(:ingredients).where(ingredients: { ingredient_name: params[:ingredient] })
   end
 
   def filter_by_search(recipes)
@@ -162,12 +206,12 @@ class Api::V1::RecipesController < ApplicationController
   end
 
   def create_or_update_success_response(message, recipe)
-    { status: 'success', message: message, data: { recipe: detailed_recipe_json(recipe) }}
+    { status: "success", message: message, data: { recipe: detailed_recipe_json(recipe) } }
   end
 
   def success_response(message, recipe)
     details = detailed_recipe_json(recipe)
-    { status: 'success', message: message,
+    { status: "success", message: message,
       data: {
         adjusted_recipe: details,
         total_calories: details[:total_calories],
@@ -179,4 +223,3 @@ class Api::V1::RecipesController < ApplicationController
     }
   end
 end
-

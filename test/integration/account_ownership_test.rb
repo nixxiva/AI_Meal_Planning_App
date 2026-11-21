@@ -15,23 +15,23 @@ class AccountOwnershipTest < ActionDispatch::IntegrationTest
   test "every affected action rejects another user before services or writes" do
     base = "/api/v1/users/#{@other.id}"
     requests = [
-      [:get, "#{base}/pantry_items", {}],
-      [:post, "#{base}/pantry_items", { pantry_item: { name: "rice", quantity: 1, unit: "g" } }],
-      [:patch, "#{base}/pantry_items/1", { pantry_item: { quantity: 2 } }],
-      [:delete, "#{base}/pantry_items/1", {}],
-      [:get, "#{base}/meal_plans", {}],
-      [:post, "#{base}/meal_plans", { meal_plan: { start_date: Date.current, end_date: Date.current } }],
-      [:get, "#{base}/meal_plans/#{@plan.id}", {}],
-      [:delete, "#{base}/meal_plans/#{@plan.id}", {}],
-      [:post, "#{base}/meal_plans/generate", {}],
-      [:post, "#{base}/meal_plans/#{@plan.id}/meal_plan_recipes", { meal_plan_recipe: { recipe_id: @recipe.id } }],
-      [:delete, "#{base}/meal_plans/#{@plan.id}/meal_plan_recipes/#{@link.id}", {}]
+      [ :get, "#{base}/pantry_items", {} ],
+      [ :post, "#{base}/pantry_items", { pantry_item: { name: "rice", quantity: 1, unit: "g" } } ],
+      [ :patch, "#{base}/pantry_items/1", { pantry_item: { quantity: 2 } } ],
+      [ :delete, "#{base}/pantry_items/1", {} ],
+      [ :get, "#{base}/meal_plans", {} ],
+      [ :post, "#{base}/meal_plans", { meal_plan: { start_date: Date.current, end_date: Date.current } } ],
+      [ :get, "#{base}/meal_plans/#{@plan.id}", {} ],
+      [ :delete, "#{base}/meal_plans/#{@plan.id}", {} ],
+      [ :post, "#{base}/meal_plans/generate", {} ],
+      [ :post, "#{base}/meal_plans/#{@plan.id}/meal_plan_recipes", { meal_plan_recipe: { recipe_id: @recipe.id } } ],
+      [ :delete, "#{base}/meal_plans/#{@plan.id}/meal_plan_recipes/#{@link.id}", {} ]
     ]
 
     forbidden_service = ->(*) { flunk "Rejected requests must not initialize external services" }
     NutritionService.stub(:new, forbidden_service) do
       MealPlanGeneratorService.stub(:new, forbidden_service) do
-        assert_no_difference ["MealPlan.count", "MealPlanRecipe.count", "PantryItem.count", "Recipe.count", "Ingredient.count"] do
+        assert_no_difference [ "MealPlan.count", "MealPlanRecipe.count", "PantryItem.count", "Recipe.count", "Ingredient.count" ] do
           requests.each do |method, path, params|
             public_send(method, path, params: params.presence, headers: auth_headers(@owner), as: :json)
             assert_response :forbidden, "#{method.upcase} #{path}"
@@ -103,7 +103,7 @@ class AccountOwnershipTest < ActionDispatch::IntegrationTest
   end
 
   test "admin account management routes are unavailable" do
-    [[:get, ""], [:post, ""], [:get, "/1"], [:patch, "/1"], [:put, "/1"], [:delete, "/1"]].each do |method, suffix|
+    [ [ :get, "" ], [ :post, "" ], [ :get, "/1" ], [ :patch, "/1" ], [ :put, "/1" ], [ :delete, "/1" ] ].each do |method, suffix|
       assert_raises(ActionController::RoutingError) do
         Rails.application.routes.recognize_path("/api/v1/admin/users#{suffix}", method: method)
       end
