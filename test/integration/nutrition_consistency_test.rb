@@ -44,6 +44,16 @@ class NutritionConsistencyTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "daily totals round after adding fractional portions" do
+    3.times { @large_user.meal_logs.create!(recipe: @large_recipe, quantity: 0.00334, date: Date.today) }
+
+    get "/api/v1/users/#{@large_user.id}/meal_logs/today", headers: auth_headers(@large_user)
+    assert_response :success
+    assert_equal [ 0.33, 0.33, 0.33 ], response.parsed_body.map { |meal| meal.fetch("macros").fetch("calories") }
+
+    assert_daily_totals(@large_user, calories: 1.0, protein: 0.10, carbs: 0.20, fat: 0.30)
+  end
+
   private
 
   def create_recipe(name, grams)

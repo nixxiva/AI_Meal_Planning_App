@@ -35,8 +35,10 @@ class IngredientEndpointsTest < ActionDispatch::IntegrationTest
     calls = []
     service.define_singleton_method(:search_nutritionix) do |query, quantity:, unit:|
       calls << [ query, quantity, unit ]
-      { "foods" => [ { "food_name" => "rice", "serving_weight_grams" => 100, "nf_calories" => 130,
-        "nf_protein" => 2, "nf_total_fat" => 1, "nf_total_carbohydrate" => 28, "internal" => "hidden" } ] }
+      { "foods" => [
+        { "food_name" => "rice", "serving_weight_grams" => 100, "nf_calories" => 130, "internal" => "hidden" },
+        { "food_name" => "brown rice", "serving_weight_grams" => 100, "nf_calories" => 123 }
+      ] }
     end
     NutritionixService.stub(:new, service) do
       post "/api/v1/ingredients/search_nutritionix", params: { query: "rice", quantity: 100, unit: "g" },
@@ -44,7 +46,7 @@ class IngredientEndpointsTest < ActionDispatch::IntegrationTest
     end
     assert_response :success
     assert_equal [ [ "rice", 100.0, "g" ] ], calls
-    assert_equal "rice", response.parsed_body.dig("foods", 0, "food_name")
+    assert_equal [ "rice", "brown rice" ], response.parsed_body.fetch("foods").pluck("food_name")
     refute response.body.include?("internal")
     assert_equal 1, Ingredient.count
   end

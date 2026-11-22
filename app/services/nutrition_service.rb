@@ -4,27 +4,25 @@ class NutritionService
     "Content-Type" => "application/json"
   }
   NUTRIENT_FIELDS = {
-    calories: "nf_calories", protein: "nf_protein",
-    carbs: "nf_total_carbohydrate", fat: "nf_total_fat"
+    calories: [ 208, "nf_calories" ], protein: [ 203, "nf_protein" ],
+    carbs: [ 205, "nf_total_carbohydrate" ], fat: [ 204, "nf_total_fat" ]
   }.freeze
-
-  def initialize
-    @credentials = Rails.application.credentials.nutritionix
-    @headers = HEADERS.merge(
-      "x-app-id" => @credentials[:app_id],
-      "x-app-key" => @credentials[:app_key]
-    )
-  end
+  TOTAL_KEYS = NUTRIENT_FIELDS.keys.map { |nutrient| :"total_#{nutrient}" }.freeze
 
   # Fetch nutrition data from the Nutritionix API
   def fetch_nutrition_data(query, quantity, unit)
+    credentials = Rails.application.credentials.nutritionix
+    headers = HEADERS.merge(
+      "x-app-id" => credentials[:app_id],
+      "x-app-key" => credentials[:app_key]
+    )
     formatted_query = "#{quantity} #{unit} of #{query}"
     Rails.logger.info "Nutritionix API Request: #{formatted_query}"
 
     begin
       response = HTTParty.post(
         "#{BASE_URL}/natural/nutrients",
-        headers: @headers,
+        headers: headers,
         body: { query: formatted_query }.to_json
       )
 
@@ -50,12 +48,13 @@ class NutritionService
     ingredient = Ingredient.find_or_initialize_by(ingredient_name: ingredient_name)
     unless nutrition_available?(ingredient)
       nutrition_data = fetch_nutrition_data(ingredient_name, quantity, unit)
-      food = nutrition_data["foods"].first if nutrition_data.is_a?(Hash) && nutrition_data["foods"].is_a?(Array)
+      foods = nutrition_data["foods"] if nutrition_data.is_a?(Hash)
+      food = foods.first if foods.is_a?(Array) && foods.length == 1
       weight = food["serving_weight_grams"] if food.is_a?(Hash)
-      available = nonnegative_number?(weight) && weight.positive? &&
-        NUTRIENT_FIELDS.values.all? { |field| nonnegative_number?(food[field]) && (food[field].to_f / weight).finite? }
-      attributes = NUTRIENT_FIELDS.to_h do |nutrient, field|
-        [ "#{nutrient}_per_gram", available ? food[field].to_f / weight : nil ]
+      amounts = provider_nutrients_per_gram(food, weight) if nonnegative_number?(weight) && weight.positive?
+      available = amounts && amounts.values.none?(&:nil?)
+      attributes = NUTRIENT_FIELDS.keys.to_h do |nutrient|
+        [ "#{nutrient}_per_gram", available ? amounts.fetch(nutrient) : nil ]
       end
       ingredient.update!(attributes.merge("serving_weight_grams" => available ? weight : nil))
     end
@@ -63,15 +62,25 @@ class NutritionService
     ingredient
   end
 
-  def update_recipe_nutrition(recipe, servings: 1)
-    totals = { total_calories: 0, total_protein: 0, total_carbs: 0, total_fat: 0 }
-    recipe.recipe_ingredients.each do |ri|
-      nutrition = ingredient_nutrition(ri)
-      return unavailable_nutrition unless nutrition[:nutrition_available]
+  def recipe_nutrition(recipe, servings: 1)
+    ingredients = recipe.recipe_ingredients.lazy.map { |ingredient| ingredient_nutrition(ingredient) }
+    sum_nutrition(ingredients, servings: servings)
+  end
 
-      totals.each_key { |nutrient| totals[nutrient] += nutrition[nutrient] * servings }
+  def sum_nutrition(items, servings: 1)
+    totals = TOTAL_KEYS.index_with(0)
+    items.each do |item|
+      return unavailable_nutrition unless item.fetch(:nutrition_available)
+
+      totals.each_key { |key| totals[key] += item.fetch(key) * servings }
     end
-    totals.transform_values { |value| value.round(2) }.merge(nutrition_available: true)
+    return unavailable_nutrition unless totals.values.all?(&:finite?)
+
+    totals.merge(nutrition_available: true)
+  end
+
+  def rounded_nutrition(nutrition)
+    nutrition.transform_values { |value| value.is_a?(Numeric) ? value.round(2) : value }
   end
 
   def ingredient_nutrition(recipe_ingredient)
@@ -107,6 +116,25 @@ class NutritionService
 
   private
 
+  def provider_nutrients_per_gram(food, weight)
+    details = food["full_nutrients"]
+    details = [] unless details.is_a?(Array)
+
+    NUTRIENT_FIELDS.to_h do |nutrient, (attribute_id, summary_field)|
+      matches = details.select { |row| row.is_a?(Hash) && row["attr_id"] == attribute_id }
+      detailed_amount = matches.first["value"] if matches.one?
+      amount = per_gram(detailed_amount, weight) || per_gram(food[summary_field], weight)
+      [ nutrient, amount ]
+    end
+  end
+
+  def per_gram(amount, weight)
+    return unless nonnegative_number?(amount)
+
+    result = amount.to_f / weight
+    result if result.finite?
+  end
+
   def nutrition_available?(ingredient)
     ingredient && nonnegative_number?(ingredient.serving_weight_grams) && ingredient.serving_weight_grams.positive? &&
       NUTRIENT_FIELDS.keys.all? { |nutrient| nonnegative_number?(ingredient.public_send("#{nutrient}_per_gram")) }
@@ -117,6 +145,6 @@ class NutritionService
   end
 
   def unavailable_nutrition
-    { total_calories: nil, total_protein: nil, total_carbs: nil, total_fat: nil, nutrition_available: false }
+    TOTAL_KEYS.index_with(nil).merge(nutrition_available: false)
   end
 end

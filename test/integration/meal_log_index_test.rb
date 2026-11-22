@@ -10,15 +10,20 @@ class MealLogIndexTest < ActionDispatch::IntegrationTest
   end
 
   test "index returns only the owner's logs newest first" do
+    ingredient = Ingredient.create!(ingredient_name: "rice")
+    @recipe.recipe_ingredients.create!(ingredient: ingredient, quantity: 100, unit: "g")
     older = @owner.meal_logs.create!(recipe: @recipe, quantity: 1, date: 2.days.ago.to_date)
     newer = @owner.meal_logs.create!(recipe: @recipe, quantity: 2, date: Date.yesterday)
     other_recipe = @other.recipes.create!(title: "Soup", instructions: "Boil")
     @other.meal_logs.create!(recipe: other_recipe, quantity: 1, date: Date.current)
 
-    get path(@owner), headers: auth_headers(@owner), as: :json
-    assert_response :success
+    assert_no_queries_match(/\bFROM "(?:recipes|recipe_ingredients|ingredients)"/) do
+      get path(@owner), headers: auth_headers(@owner), as: :json
+      assert_response :success
+    end
     assert_equal [ newer.id, older.id ], response.parsed_body.map { |log| log.fetch("id") }
     assert_equal [ 2.0, 1.0 ], response.parsed_body.map { |log| log.fetch("quantity") }
+    assert_equal newer.as_json, response.parsed_body.first
   end
 
   test "index rejects a URL for another account and requires authentication" do

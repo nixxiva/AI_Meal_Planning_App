@@ -7,9 +7,8 @@ class RecipeAdjustmentService
 
   def adjust_recipe(target_nutrition)
     preferences = gather_user_context
-    current_nutrition = @nutrition_service.update_recipe_nutrition(@recipe)
 
-    ai_response = call_ai_for_adjustment(target_nutrition, preferences, current_nutrition)
+    ai_response = call_ai_for_adjustment(target_nutrition, preferences)
     adjusted_recipe_data = parse_ai_response(ai_response)
 
     process_adjusted_recipe(adjusted_recipe_data)
@@ -26,8 +25,8 @@ class RecipeAdjustmentService
     }
   end
 
-  def call_ai_for_adjustment(target_nutrition, preferences, current_nutrition)
-    current_ingredients = @recipe.recipe_ingredients.map do |ri|
+  def call_ai_for_adjustment(target_nutrition, preferences)
+    current_ingredients = @recipe.recipe_ingredients.includes(:ingredient).map do |ri|
       {
         name: ri.ingredient.ingredient_name,
         quantity: ri.quantity,

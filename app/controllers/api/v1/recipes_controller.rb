@@ -15,9 +15,8 @@ class Api::V1::RecipesController < ApplicationController
 
   # GET /api/v1/recipes
   def index
-    @recipes = @current_user.recipes.includes(:recipe_ingredients, :ingredients, :ratings)
-    @recipes = filter_recipes(@recipes)
-    render json: { data: { recipes: @recipes.map { |recipe| recipe_summary_json(recipe) }, total: @recipes.count } }
+    recipes = filter_recipes(@current_user.recipes).to_a
+    render json: { data: { recipes: recipe_summaries(recipes), total: recipes.size } }
   end
 
   # GET /api/v1/recipes/:id
@@ -68,7 +67,7 @@ class Api::V1::RecipesController < ApplicationController
   def rate
     rating = @recipe.ratings.find_or_initialize_by(user: @current_user)
     if rating.update(rating: rating_params[:rating])
-      render json: { status: "success", message: "Recipe rated successfully", data: recipe_summary_json(@recipe) }
+      render json: { status: "success", message: "Recipe rated successfully", data: recipe_summaries([ @recipe ]).sole }
     else
       render json: { status: "error", errors: rating.errors.full_messages }, status: :unprocessable_entity
     end
@@ -152,7 +151,8 @@ class Api::V1::RecipesController < ApplicationController
   end
 
   def filter_by_ingredient(recipes)
-    recipes.joins(:ingredients).where(ingredients: { ingredient_name: params[:ingredient] })
+    matching_ingredients = RecipeIngredient.joins(:ingredient).where(ingredients: { ingredient_name: params[:ingredient] })
+    recipes.where(id: matching_ingredients.select(:recipe_id))
   end
 
   def filter_by_search(recipes)
@@ -178,26 +178,29 @@ class Api::V1::RecipesController < ApplicationController
     create_recipe_ingredients(ingredients)
   end
 
-  def recipe_summary_json(recipe)
-    { id: recipe.id, title: recipe.title, average_rating: recipe.ratings.average(:rating).to_f.round(1), total_ratings: recipe.ratings.count }
+  def recipe_summaries(recipes)
+    ratings = Rating.where(recipe_id: recipes.map(&:id)).group(:recipe_id)
+      .pluck(:recipe_id, Arel.sql("AVG(rating)"), Arel.sql("COUNT(*)"))
+      .to_h { |recipe_id, average, count| [ recipe_id, [ average, count ] ] }
+
+    recipes.map do |recipe|
+      average, count = ratings.fetch(recipe.id, [ nil, 0 ])
+      { id: recipe.id, title: recipe.title, average_rating: average.to_f.round(1), total_ratings: count }
+    end
   end
 
   def detailed_recipe_json(recipe)
     nutrition_service = NutritionService.new
-    nutrition_data = nutrition_service.update_recipe_nutrition(recipe)
+    ingredients = recipe.recipe_ingredients.includes(:ingredient).map { |ri| ingredient_details(ri, nutrition_service) }
+    nutrition_data = nutrition_service.rounded_nutrition(nutrition_service.sum_nutrition(ingredients))
     {
       id: recipe.id, title: recipe.title, instructions: recipe.instructions,
       user: { id: recipe.user.id },
-      ingredients: recipe.recipe_ingredients.map { |ri| ingredient_details(ri, nutrition_service) },
+      ingredients: ingredients,
       ratings: recipe.ratings.map { |rating| { user_id: rating.user_id, rating: rating.rating } },
       average_rating: recipe.ratings.average(:rating).to_f.round(1),
-      total_ratings: recipe.ratings.count,
-      total_calories: nutrition_data[:total_calories],
-      total_protein: nutrition_data[:total_protein],
-      total_carbs: nutrition_data[:total_carbs],
-      total_fat: nutrition_data[:total_fat],
-      nutrition_available: nutrition_data[:nutrition_available]
-    }
+      total_ratings: recipe.ratings.count
+    }.merge(nutrition_data)
   end
 
   def ingredient_details(ri, nutrition_service)

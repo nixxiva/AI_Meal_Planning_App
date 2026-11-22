@@ -17,14 +17,34 @@ class RecipeContractTest < ActionDispatch::IntegrationTest
   end
 
   test "ingredient filter returns matching owned recipes and leaves unfiltered listing working" do
+    @recipe.recipe_ingredients.create!(ingredient: @recipe.ingredients.sole, quantity: 50, unit: "g")
     other = @user.recipes.create!(title: "Soup", instructions: "Boil")
     get "/api/v1/recipes", params: { ingredient: "rice" }, headers: @headers
     assert_response :success
     assert_equal [ @recipe.id ], response.parsed_body.dig("data", "recipes").map { |recipe| recipe["id"] }
+    assert_equal 1, response.parsed_body.dig("data", "total")
 
     get "/api/v1/recipes", headers: @headers
     assert_response :success
     assert_equal [ @recipe.id, other.id ].sort, response.parsed_body.dig("data", "recipes").map { |recipe| recipe["id"] }.sort
+  end
+
+  test "recipe listing fetches rating summaries together and preserves unrated recipes" do
+    @recipe.ratings.create!(user: @user, rating: 4)
+    @recipe.ratings.create!(user: @user, rating: nil)
+    other_recipes = 11.times.map { |number| @user.recipes.create!(title: "Soup #{number}", instructions: "Boil") }
+
+    assert_queries_match(/\bFROM "(?:recipes|ratings|recipe_ingredients|ingredients)"/, count: 2) do
+      get "/api/v1/recipes", headers: @headers
+      assert_response :success
+    end
+
+    data = response.parsed_body.fetch("data")
+    assert_equal 12, data.fetch("total")
+    summaries = data.fetch("recipes").index_by { |recipe| recipe.fetch("id") }
+    assert_equal [ @recipe.id, *other_recipes.map(&:id) ].sort, summaries.keys.sort
+    assert_equal [ 4.0, 2 ], summaries.fetch(@recipe.id).values_at("average_rating", "total_ratings")
+    assert_equal [ 0.0, 0 ], summaries.fetch(other_recipes.first.id).values_at("average_rating", "total_ratings")
   end
 
   test "rating returns its saved aggregate and rerating updates the existing rating" do

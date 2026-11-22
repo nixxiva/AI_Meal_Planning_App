@@ -6,17 +6,33 @@ class Api::V1::MealLogsController < ApplicationController
 
   # GET /users/:user_id/meal_logs/today_totals
   def today_totals
-    render json: calculate_daily_totals(@today_logs)
+    nutrition = NutritionService.new
+    meals = @today_logs.lazy.filter_map do |log|
+      nutrition.recipe_nutrition(log.recipe, servings: log.quantity) if log.recipe
+    end
+    totals = nutrition.sum_nutrition(meals)
+    render json: diary_macros(nutrition.rounded_nutrition(totals))
   end
 
   # GET /users/:user_id/meal_logs/today
   def today
-    render json: calculate_today_meals(@today_logs)
+    nutrition = NutritionService.new
+    meals = @today_logs.map do |log|
+      recipe = log.recipe
+      macros = if recipe
+        totals = nutrition.recipe_nutrition(recipe, servings: log.quantity)
+        diary_macros(nutrition.rounded_nutrition(totals))
+      else
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      end
+      { id: log.id, recipe_name: recipe&.title || "Unknown", quantity: log.quantity, macros: macros }
+    end
+    render json: meals
   end
 
-  # POST /users/:user_id/meal_logs
+  # GET /users/:user_id/meal_logs
   def index
-    render json: @user.meal_logs.includes(recipe: { recipe_ingredients: :ingredient }).order(date: :desc, id: :desc)
+    render json: @user.meal_logs.order(date: :desc, id: :desc)
   end
 
   # POST /users/:user_id/meal_logs
@@ -73,32 +89,7 @@ class Api::V1::MealLogsController < ApplicationController
     render json: { success: false, errors: errors }, status: :unprocessable_entity if errors.any?
   end
 
-  def calculate_daily_totals(logs)
-    totals = { calories: 0, protein: 0, carbs: 0, fat: 0 }
-    logs.each do |log|
-      recipe = log.recipe
-      next unless recipe
-      nutrition = meal_nutrition(recipe, log.quantity)
-      return totals.transform_values { nil }.merge(nutrition_available: false) unless nutrition[:nutrition_available]
-
-      totals.each_key { |nutrient| totals[nutrient] += nutrition[nutrient] }
-    end
-    totals.merge(nutrition_available: true)
-  end
-
-  def calculate_today_meals(logs)
-    logs.map do |log|
-      {
-        id: log.id,
-        recipe_name: log.recipe&.title || "Unknown",
-        quantity: log.quantity,
-        macros: log.recipe ? meal_nutrition(log.recipe, log.quantity) : { calories: 0, protein: 0, carbs: 0, fat: 0 }
-      }
-    end
-  end
-
-  def meal_nutrition(recipe, servings)
-    NutritionService.new.update_recipe_nutrition(recipe, servings: servings)
-      .transform_keys { |key| key.to_s.delete_prefix("total_").to_sym }
+  def diary_macros(nutrition)
+    nutrition.transform_keys { |key| key.to_s.delete_prefix("total_").to_sym }
   end
 end
