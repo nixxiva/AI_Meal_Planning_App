@@ -86,6 +86,71 @@ class NutritionAvailabilityTest < ActionDispatch::IntegrationTest
     STORED_NUTRIENTS.each { |name| assert_nil ingredient.reload.public_send(name), name }
   end
 
+  test "recipes and diary use the precise per-gram protein from a single provider food" do
+    food = { "serving_weight_grams" => 49, "nf_calories" => 33.81, "nf_protein" => 0.35,
+      "nf_total_fat" => 0.08, "nf_total_carbohydrate" => 8.87,
+      "full_nutrients" => [ { "attr_id" => 203, "value" => 0.3528 }, { "attr_id" => 204, "value" => 0.0784 },
+        { "attr_id" => 205, "value" => 8.869 }, { "attr_id" => 208, "value" => 33.81 } ] }
+    payload = { "foods" => [ food ] }
+    reply = Struct.new(:code, :body, :parsed_response, :success?).new(200, payload.to_json, payload, true)
+    queries = []
+    lookup = ->(_url, body:, **) do
+      queries << JSON.parse(body).fetch("query")
+      reply
+    end
+
+    HTTParty.stub(:post, lookup) do
+      [ 49, 500 ].each do |grams|
+        post "/api/v1/recipes", params: { recipe: { title: "Grapes #{grams}", instructions: "Wash",
+          recipe_ingredients: [ { ingredient_name: "Grape", quantity: grams, unit: "g" } ] } }, headers: auth_headers, as: :json
+        assert_response :success
+      end
+    end
+
+    assert_equal [ "49 g of grape" ], queries
+    data = response.parsed_body.fetch("data")
+    assert_equal 3.60, data.fetch("total_protein")
+    ingredient = Ingredient.find_by!(ingredient_name: "grape")
+    assert_in_delta 0.0072, ingredient.protein_per_gram, 0.000001
+    assert_in_delta 0.0016, ingredient.fat_per_gram, 0.000001
+    assert_in_delta 0.181, ingredient.carbs_per_gram, 0.000001
+    assert_in_delta 0.69, ingredient.calories_per_gram, 0.000001
+
+    recipe = @user.recipes.find(data.fetch("adjusted_recipe").fetch("id"))
+    assert_equal 3.60, recipe_details(recipe).fetch("total_protein")
+    assert_daily_nutrition recipe, available: true
+    assert_equal 7.20, response.parsed_body.fetch("protein")
+  end
+
+  test "a valid detailed zero is saved and unusable details fall back to summary values" do
+    payload = provider_food(weight: 25, calories: nil)
+    payload.fetch("foods").sole["full_nutrients"] = [ nil,
+      { "attr_id" => 208, "value" => 0 }, { "attr_id" => 203, "value" => -1 },
+      { "attr_id" => 204, "value" => 2 }, { "attr_id" => 204, "value" => 3 } ]
+
+    service = NutritionService.new
+    ingredient = service.stub(:fetch_nutrition_data, payload) do
+      service.find_or_create_ingredient("water", 25, "g")
+    end
+
+    assert_equal 25, ingredient.reload.serving_weight_grams
+    assert_equal [ 0, 0, 0, 0 ], ingredient.attributes.values_at(*STORED_NUTRIENTS.first(4))
+  end
+
+  test "a provider response with multiple foods does not fill a single ingredient's nutrition" do
+    service = NutritionService.new
+    foods = provider_food(weight: 40, calories: 80).fetch("foods") +
+      provider_food(weight: 60, calories: 60).fetch("foods")
+    ingredient = service.stub(:fetch_nutrition_data, { "foods" => foods }) do
+      service.find_or_create_ingredient("oats and milk", 100, "g")
+    end
+
+    STORED_NUTRIENTS.each { |name| assert_nil ingredient.reload.public_send(name), name }
+    recipe = @user.recipes.create!(title: "Oats and milk", instructions: "Stir")
+    recipe.recipe_ingredients.create!(ingredient: ingredient, quantity: 100, unit: "g")
+    assert_nutrition recipe_details(recipe), available: false, prefix: "total_"
+  end
+
   test "legacy provider fallback zeros are unavailable and recover on a later lookup" do
     @ingredient.update!(calories_per_gram: 0, protein_per_gram: 0, carbs_per_gram: 0, fat_per_gram: 0, serving_weight_grams: 0)
     recipe = create_recipe("g")
