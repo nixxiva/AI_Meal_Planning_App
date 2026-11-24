@@ -1,4 +1,11 @@
 class MealPlanGeneratorService
+  PANTRY_AMOUNT_UNITS = %w[
+    mg milligram milligrams g gram grams kg kilogram kilograms oz ounce ounces lb pound pounds
+    ml milliliter milliliters l liter liters cup cups fl\ oz fluid\ ounce fluid\ ounces
+    teaspoon teaspoons tsp tablespoon tablespoons tbsp
+    piece pieces item items count egg eggs can cans
+  ].freeze
+
   def initialize(user)
     @user = user
   end
@@ -21,9 +28,18 @@ class MealPlanGeneratorService
       allergies: @user.allergies.pluck(:allergy_name),
       disliked_ingredients: @user.disliked_ingredients.pluck(:ingredient_name),
       health_goal: @user.health_goal&.goal_name,
-      pantry_items: @user.pantry_items.pluck(:name),
+      pantry_items: pantry_guidance,
       recipes: @user.recipes.pluck(:title)
     }
+  end
+
+  def pantry_guidance
+    @user.pantry_items.pluck(:name, :quantity, :unit).map do |name, quantity, unit|
+      unit = unit.to_s.strip
+      usable_unit = PANTRY_AMOUNT_UNITS.include?(unit.downcase)
+      usable_amount = quantity&.finite? && quantity >= 0 && (usable_unit || quantity.zero?)
+      { name: name.to_s.strip, quantity: usable_amount ? quantity : nil, unit: usable_amount && usable_unit ? unit : nil }
+    end
   end
 
   def call_ai_service(preferences)
@@ -35,10 +51,10 @@ class MealPlanGeneratorService
       Allergies: #{preferences[:allergies].join(", ")}
       Disliked ingredients: #{preferences[:disliked_ingredients].join(", ")}
       Health goal: #{preferences[:health_goal]}
-      Available pantry items: #{preferences[:pantry_items].join(", ")}
+      Available pantry items: #{preferences[:pantry_items].to_json}
 
       Requirements:
-        1. Prioritize using pantry items when possible, but you may use all or just a subset depending on the meal.
+        1. Prioritize using pantry items when possible. Pantry amounts are guidance only. When units match, aim to stay within the reported amount across all meals. A zero quantity means that pantry entry is out of stock. A null quantity means the amount is unknown. Do not estimate unknown amounts or combine incompatible units.
         2. Suggest only a few additional ingredients beyond the pantry to make meals balanced and nutritious. Avoid unnecessary spices or minor ingredients unless essential.
         3. Ensure each meal is unique. Use different subsets of pantry items for each meal when possible and avoid repeating recipes listed in #{preferences[:recipes].join(", ")}.
         4. Include diverse main ingredients (vegetables, proteins, grains, etc.) to make each meal distinct.
@@ -60,7 +76,7 @@ class MealPlanGeneratorService
       Respond with only the JSON array. Do not include markdown, code blocks, or extra text.
     PROMPT
 
-    OpenaiService.new.generate_meal_plan(prompt)
+    OpenaiService.new.generate_meal_plan(prompt, require_complete: true)
   end
 
   def parse_ai_response(response)

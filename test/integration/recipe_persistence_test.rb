@@ -297,7 +297,7 @@ class RecipePersistenceTest < ActionDispatch::IntegrationTest
   def with_providers(output = "[]", capture: nil)
     nutrition = NutritionService.allocate
     ai = Object.new
-    ai.define_singleton_method(:generate_meal_plan) do |prompt|
+    ai.define_singleton_method(:generate_meal_plan) do |prompt, **|
       capture&.call(prompt)
       output
     end

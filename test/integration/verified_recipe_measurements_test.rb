@@ -144,7 +144,7 @@ class VerifiedRecipeMeasurementsTest < ActionDispatch::IntegrationTest
 
   def with_reply(payload, substitute: false)
     ai = Object.new
-    ai.define_singleton_method(:generate_meal_plan) do |prompt|
+    ai.define_singleton_method(:generate_meal_plan) do |prompt, **|
       substitute && prompt.include?("Suggest one practical substitute") ? "" : payload.to_json
     end
     HTTParty.stub(:post, ->(*) { flunk "Known reference lines should not call Nutritionix" }) do
