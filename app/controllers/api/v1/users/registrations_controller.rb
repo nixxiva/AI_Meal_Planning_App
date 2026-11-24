@@ -1,9 +1,9 @@
 module Api
-  module V1    
+  module V1
     class Users::RegistrationsController < Devise::RegistrationsController
       respond_to :json
 
-      before_action :sign_up_params, only: [:create]
+      before_action :sign_up_params, only: [ :create ]
 
       private
 
@@ -12,7 +12,7 @@ module Api
           resource.send_confirmation_instructions
 
           render json: {
-            status: { code: 200, message: 'Signed up successfully. Please confirm your email.',
+            status: { code: 200, message: "Signed up successfully. Please confirm your email.",
                       token: @token,
                       data: UserSerializer.new(resource).serializable_hash[:data][:attributes] }
         }
@@ -25,9 +25,11 @@ module Api
       end
 
       def sign_up_params
-        params.require(:registration).require(:user).permit(:email, :password, :password_confirmation, :first_name, :last_name, :role)
+        params.require(:registration).require(:user)
+              .except(:role)
+              .permit(:email, :password, :password_confirmation, :first_name, :last_name)
+              .merge(role: User::MEMBER_ROLE)
       end
     end
   end
 end
-

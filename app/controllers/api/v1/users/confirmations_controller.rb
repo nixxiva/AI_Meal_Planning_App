@@ -15,7 +15,6 @@ class Api::V1::Users::ConfirmationsController < Devise::ConfirmationsController
   private
 
   def generate_token(user)
-    JWT.encode({ user_id: user.id }, Rails.application.credentials.devise_jwt_secret_key!, 'HS256')
+    JWT.encode({ user_id: user.id }, Rails.application.credentials.devise_jwt_secret_key!, "HS256")
   end
-
 end

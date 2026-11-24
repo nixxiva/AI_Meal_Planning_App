@@ -1,15 +1,38 @@
 class Api::V1::MealLogsController < ApplicationController
   before_action :authenticate_user!
-  before_action :set_meal_log, only: [:update, :destroy]
+  before_action :set_user, only: :index
+  before_action :set_meal_log, only: [ :update, :destroy ]
+  before_action :load_today_logs, only: [ :today, :today_totals ]
 
   # GET /users/:user_id/meal_logs/today_totals
   def today_totals
-    render json: calculate_daily_totals(current_user)
+    nutrition = NutritionService.new
+    meals = @today_logs.lazy.filter_map do |log|
+      nutrition.recipe_nutrition(log.recipe, servings: log.quantity) if log.recipe
+    end
+    totals = nutrition.sum_nutrition(meals)
+    render json: diary_macros(nutrition.rounded_nutrition(totals))
   end
 
   # GET /users/:user_id/meal_logs/today
   def today
-    render json: calculate_today_meals(current_user)
+    nutrition = NutritionService.new
+    meals = @today_logs.map do |log|
+      recipe = log.recipe
+      macros = if recipe
+        totals = nutrition.recipe_nutrition(recipe, servings: log.quantity)
+        diary_macros(nutrition.rounded_nutrition(totals))
+      else
+        { calories: 0, protein: 0, carbs: 0, fat: 0 }
+      end
+      { id: log.id, recipe_name: recipe&.title || "Unknown", quantity: log.quantity, macros: macros }
+    end
+    render json: meals
+  end
+
+  # GET /users/:user_id/meal_logs
+  def index
+    render json: @user.meal_logs.order(date: :desc, id: :desc)
   end
 
   # POST /users/:user_id/meal_logs
@@ -40,46 +63,33 @@ class Api::V1::MealLogsController < ApplicationController
 
   private
 
+  def set_user
+    unless params[:user_id] == current_user.id.to_s
+      render json: { error: "Unauthorized access" }, status: :forbidden
+      return
+    end
+    @user = current_user
+  end
+
   def set_meal_log
     @meal_log = current_user.meal_logs.find(params[:id])
     rescue ActiveRecord::RecordNotFound
     render json: { success: false, error: "Meal log not found" }, status: :not_found
   end
-  
+
   def meal_log_params
     params.require(:meal_log).permit(:recipe_id, :quantity, :date)
   end
-  
-  def calculate_daily_totals(user, date = Date.today)
-    logs = user.meal_logs.includes(:recipe).where(date: date)
-    totals = { calories: 0, protein: 0, carbs: 0, fat: 0 }
-    logs.each do |log|
-      recipe = log.recipe
-      next unless recipe
-      recipe.ingredients.each do |ing|
-        quantity = log.quantity || 1
-        totals[:calories] += (ing.calories_per_gram * ing.serving_weight_grams * quantity)
-        totals[:protein]  += (ing.protein_per_gram  * ing.serving_weight_grams * quantity)
-        totals[:carbs]    += (ing.carbs_per_gram    * ing.serving_weight_grams * quantity)
-        totals[:fat]      += (ing.fat_per_gram      * ing.serving_weight_grams * quantity)
-      end
+
+  def load_today_logs
+    @today_logs = current_user.meal_logs.includes(recipe: { recipe_ingredients: :ingredient }).where(date: Date.today)
+    errors = @today_logs.reject(&:valid?).flat_map do |log|
+      log.errors.full_messages.map { |message| "Meal log #{log.id}: #{message}" }
     end
-    totals
+    render json: { success: false, errors: errors }, status: :unprocessable_entity if errors.any?
   end
-  
-  def calculate_today_meals(user, date = Date.today)
-    user.meal_logs.includes(:recipe).where(date: date).map do |log|
-      {
-        id: log.id,
-        recipe_name: log.recipe&.title || "Unknown",
-        quantity: log.quantity,
-        macros: log.recipe ? log.recipe.ingredients.each_with_object({ calories: 0, protein: 0, carbs: 0, fat: 0 }) { |ing, h|
-          h[:calories] += ing.calories_per_gram * ing.serving_weight_grams * log.quantity
-          h[:protein]  += ing.protein_per_gram  * ing.serving_weight_grams * log.quantity
-          h[:carbs]    += ing.carbs_per_gram    * ing.serving_weight_grams * log.quantity
-          h[:fat]      += ing.fat_per_gram      * ing.serving_weight_grams * log.quantity
-        } : { calories: 0, protein: 0, carbs: 0, fat: 0 }
-      }
-    end
+
+  def diary_macros(nutrition)
+    nutrition.transform_keys { |key| key.to_s.delete_prefix("total_").to_sym }
   end
 end

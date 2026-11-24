@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_18_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -19,7 +19,7 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.string "allergy_name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_allergies_on_user_id"
+    t.index [ "user_id" ], name: "index_allergies_on_user_id"
   end
 
   create_table "dietary_preferences", force: :cascade do |t|
@@ -27,7 +27,7 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.string "pref_name"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_dietary_preferences_on_user_id"
+    t.index [ "user_id" ], name: "index_dietary_preferences_on_user_id"
   end
 
   create_table "disliked_ingredients", force: :cascade do |t|
@@ -35,7 +35,7 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "ingredient_name"
-    t.index ["user_id"], name: "index_disliked_ingredients_on_user_id"
+    t.index [ "user_id" ], name: "index_disliked_ingredients_on_user_id"
   end
 
   create_table "health_goals", force: :cascade do |t|
@@ -53,6 +53,7 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.float "protein_per_gram"
     t.float "carbs_per_gram"
     t.float "fat_per_gram"
+    t.index "lower((ingredient_name)::text)", name: "index_unique_lowercase_ingredients", unique: true
   end
 
   create_table "meal_logs", force: :cascade do |t|
@@ -62,8 +63,8 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.date "date"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["recipe_id"], name: "index_meal_logs_on_recipe_id"
-    t.index ["user_id"], name: "index_meal_logs_on_user_id"
+    t.index [ "recipe_id" ], name: "index_meal_logs_on_recipe_id"
+    t.index [ "user_id" ], name: "index_meal_logs_on_user_id"
   end
 
   create_table "meal_plan_recipes", force: :cascade do |t|
@@ -72,8 +73,8 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.integer "meal_type"
-    t.index ["meal_plan_id"], name: "index_meal_plan_recipes_on_meal_plan_id"
-    t.index ["recipe_id"], name: "index_meal_plan_recipes_on_recipe_id"
+    t.index [ "meal_plan_id" ], name: "index_meal_plan_recipes_on_meal_plan_id"
+    t.index [ "recipe_id" ], name: "index_meal_plan_recipes_on_recipe_id"
   end
 
   create_table "meal_plans", force: :cascade do |t|
@@ -82,7 +83,7 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.bigint "user_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_meal_plans_on_user_id"
+    t.index [ "user_id" ], name: "index_meal_plans_on_user_id"
   end
 
   create_table "pantry_items", force: :cascade do |t|
@@ -93,8 +94,8 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.string "name"
-    t.index ["ingredient_id"], name: "index_pantry_items_on_ingredient_id"
-    t.index ["user_id"], name: "index_pantry_items_on_user_id"
+    t.index [ "ingredient_id" ], name: "index_pantry_items_on_ingredient_id"
+    t.index [ "user_id" ], name: "index_pantry_items_on_user_id"
   end
 
   create_table "ratings", force: :cascade do |t|
@@ -103,8 +104,8 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.integer "rating"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["recipe_id"], name: "index_ratings_on_recipe_id"
-    t.index ["user_id"], name: "index_ratings_on_user_id"
+    t.index [ "recipe_id" ], name: "index_ratings_on_recipe_id"
+    t.index [ "user_id" ], name: "index_ratings_on_user_id"
   end
 
   create_table "recipe_ingredients", force: :cascade do |t|
@@ -114,8 +115,8 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.string "unit"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["ingredient_id"], name: "index_recipe_ingredients_on_ingredient_id"
-    t.index ["recipe_id"], name: "index_recipe_ingredients_on_recipe_id"
+    t.index [ "ingredient_id" ], name: "index_recipe_ingredients_on_ingredient_id"
+    t.index [ "recipe_id" ], name: "index_recipe_ingredients_on_recipe_id"
   end
 
   create_table "recipes", force: :cascade do |t|
@@ -124,7 +125,7 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.bigint "user_id", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_recipes_on_user_id"
+    t.index [ "user_id" ], name: "index_recipes_on_user_id"
   end
 
   create_table "users", force: :cascade do |t|
@@ -144,11 +145,11 @@ ActiveRecord::Schema[7.2].define(version: 2025_09_02_111837) do
     t.datetime "confirmed_at"
     t.string "unconfirmed_email"
     t.bigint "health_goal_id"
-    t.index ["confirmation_token"], name: "index_users_on_confirmation_token", unique: true
-    t.index ["email"], name: "index_users_on_email", unique: true
-    t.index ["health_goal_id"], name: "index_users_on_health_goal_id"
-    t.index ["jti"], name: "index_users_on_jti", unique: true
-    t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
+    t.index [ "confirmation_token" ], name: "index_users_on_confirmation_token", unique: true
+    t.index [ "email" ], name: "index_users_on_email", unique: true
+    t.index [ "health_goal_id" ], name: "index_users_on_health_goal_id"
+    t.index [ "jti" ], name: "index_users_on_jti", unique: true
+    t.index [ "reset_password_token" ], name: "index_users_on_reset_password_token", unique: true
   end
 
   add_foreign_key "allergies", "users"

@@ -11,23 +11,15 @@ class NutritionixService
     }
   end
 
-  def search_food(query)
-    url = "#{BASE_URL}/natural/nutrients"
-    body = { query: query }.to_json
-
-    response = HTTParty.post(url, headers: @headers, body: body)
-    return {} unless response.code == 200
-
-    data = JSON.parse(response.body)
-    food = data["foods"]&.first || {}
-    {
-      "serving_weight_grams" => food["serving_weight_grams"] || 0,
-      "calories_per_gram" => food["nf_calories"].to_f / (food["serving_weight_grams"] || 1),
-      "protein_per_gram" => food["nf_protein"].to_f / (food["serving_weight_grams"] || 1),
-      "carbs_per_gram" => food["nf_total_carbohydrate"].to_f / (food["serving_weight_grams"] || 1),
-      "fat_per_gram" => food["nf_total_fat"].to_f / (food["serving_weight_grams"] || 1)
-    }
-    rescue JSON::ParserError
-    {}
+  def search_nutritionix(query, quantity: 1, unit: "g")
+    response = HTTParty.post(
+      "#{BASE_URL}/natural/nutrients",
+      headers: @headers,
+      body: { query: "#{quantity} #{unit} of #{query}" }.to_json
+    )
+    response.success? ? response.parsed_response : nil
+  rescue StandardError => error
+    Rails.logger.error("Nutritionix search failed: #{error.message}")
+    nil
   end
 end

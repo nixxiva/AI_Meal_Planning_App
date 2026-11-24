@@ -1,4 +1,5 @@
 class User < ApplicationRecord
+  MEMBER_ROLE = "member".freeze
 
   include Devise::JWT::RevocationStrategies::JTIMatcher
   # Include default devise modules. Others available are:
@@ -6,7 +7,7 @@ class User < ApplicationRecord
   devise :database_authenticatable, :registerable,
         :recoverable, :rememberable, :validatable, :confirmable,
         :jwt_authenticatable, jwt_revocation_strategy: self
-  
+
   has_many :dietary_preferences, dependent: :destroy
   has_many :allergies, dependent: :destroy
   has_many :disliked_ingredients, dependent: :destroy
@@ -26,16 +27,17 @@ class User < ApplicationRecord
 
   validates :email, presence: true, uniqueness: true
   validates :first_name, :last_name, :role, presence: true
+  validates :role, inclusion: { in: [ MEMBER_ROLE, "admin" ] }, if: :will_save_change_to_role?
 
-  #jti
+  # jti
   before_create :set_jti
 
   private
-  #jti
+  # jti
   def set_jti
     self.jti ||= SecureRandom.uuid
   end
-  
+
   def has_at_least_one_dietary_preference
     if @user.confirmed? && dietary_preferences.empty?
       errors.add(:base, "User must select at least one dietary preference")

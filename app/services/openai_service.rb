@@ -18,7 +18,7 @@ class OpenaiService
     raise "OpenAI returned empty response" if content.nil?
 
     # Remove backticks / markdown and ensure a string
-    cleaned = content.gsub(/```json|```/i, '').strip
+    cleaned = content.gsub(/```json|```/i, "").strip
     cleaned.empty? ? "[]" : cleaned
   rescue Faraday::TooManyRequestsError
     raise "OpenAI rate limit exceeded"
