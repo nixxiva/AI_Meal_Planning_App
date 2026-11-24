@@ -1,11 +1,21 @@
 class Api::V1::MealPlansController < ApplicationController
+  PLAN_JSON = {
+    include: {
+      meal_plan_recipes: {
+        include: {
+          recipe: { include: { recipe_ingredients: { include: :ingredient } } }
+        }
+      }
+    }
+  }.freeze
+
   before_action :authenticate_user!
   before_action :set_user
 
   # GET /api/v1/users/:user_id/meal_plans
   def index
     meal_plans = @user.meal_plans.includes(meal_plan_recipes: { recipe: { recipe_ingredients: :ingredient } })
-    render json: meal_plans.to_json(include: { meal_plan_recipes: { include: { recipe: { include: { recipe_ingredients: { include: :ingredient } } } } } })
+    render json: meal_plans.as_json(PLAN_JSON)
   end
 
   # POST /api/v1/users/:user_id/meal_plans
@@ -13,7 +23,7 @@ class Api::V1::MealPlansController < ApplicationController
     meal_plan = @user.meal_plans.build(meal_plan_params)
 
     if meal_plan.save
-      render json: { message: "Meal plan created successfully", data: meal_plan }, status: :ok
+      render json: { message: "Meal plan created successfully", data: meal_plan.as_json(PLAN_JSON) }, status: :ok
     else
       render json: { errors: meal_plan.errors.full_messages }, status: :unprocessable_entity
     end
@@ -24,7 +34,7 @@ class Api::V1::MealPlansController < ApplicationController
     meal_plan = @user.meal_plans.find_by(id: params[:id])
 
     if meal_plan
-      render json: { status: "success", data: meal_plan }, status: :ok
+      render json: { status: "success", data: meal_plan.as_json(PLAN_JSON) }, status: :ok
     else
       render json: { error: "Meal plan doesn't exist" }, status: :not_found
     end
@@ -65,21 +75,7 @@ class Api::V1::MealPlansController < ApplicationController
     }
     suggestions = {}
     suggestion_service = RecipeSuggestionService.new
-    meal_plan.as_json(
-      include: {
-        meal_plan_recipes: {
-          include: {
-            recipe: {
-              include: {
-                recipe_ingredients: {
-                  include: :ingredient
-                }
-              }
-            }
-          }
-        }
-      }
-    ).tap do |json|
+    meal_plan.as_json(PLAN_JSON).tap do |json|
       json["meal_plan_recipes"].each do |mpr|
         mpr["recipe"]["recipe_ingredients"].each do |ri|
           ing_name = ri["ingredient"]["ingredient_name"].strip.downcase
