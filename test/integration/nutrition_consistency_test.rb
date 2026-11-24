@@ -32,15 +32,20 @@ class NutritionConsistencyTest < ActionDispatch::IntegrationTest
     assert_daily_totals(@small_user, calories: 150, protein: 15, carbs: 30, fat: 45)
   end
 
-  test "today list agrees with recipe totals multiplied by eaten servings" do
-    record_meal(@large_user, @large_recipe, 2)
-    details = recipe_details(@large_user, @large_recipe)
-    get "/api/v1/users/#{@large_user.id}/meal_logs/today", headers: auth_headers(@large_user)
-    assert_response :success
-    meal = response.parsed_body.sole
-    assert_equal 2, meal.fetch("quantity")
-    %w[calories protein carbs fat].each do |nutrient|
-      assert_in_delta details.fetch("total_#{nutrient}") * 2, meal.fetch("macros").fetch(nutrient), 0.001
+  [ 0.5, 1, 5 ].each do |quantity|
+    test "diary quantity #{quantity} scales the whole saved recipe" do
+      record_meal(@large_user, @large_recipe, quantity)
+      details = recipe_details(@large_user, @large_recipe)
+      expected = %i[calories protein carbs fat].index_with do |nutrient|
+        details.fetch("total_#{nutrient}") * quantity
+      end
+
+      get "/api/v1/users/#{@large_user.id}/meal_logs/today", headers: auth_headers(@large_user)
+      assert_response :success
+      meal = response.parsed_body.sole
+      assert_equal quantity, meal.fetch("quantity")
+      expected.each { |nutrient, value| assert_in_delta value, meal.fetch("macros").fetch(nutrient.to_s), 0.001 }
+      assert_daily_totals(@large_user, expected)
     end
   end
 

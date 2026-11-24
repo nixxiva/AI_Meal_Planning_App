@@ -43,7 +43,7 @@ class MealPlanGeneratorService
         3. Ensure each meal is unique. Use different subsets of pantry items for each meal when possible and avoid repeating recipes listed in #{preferences[:recipes].join(", ")}.
         4. Include diverse main ingredients (vegetables, proteins, grains, etc.) to make each meal distinct.
         5. Feel free to create entirely new dishes or variations of pantry-based dishes as long as they align with the user's preferences.
-        6. Provide exactly 3 meals: breakfast, lunch, and dinner.
+        6. Provide exactly 3 meals: breakfast, lunch, and dinner. Each recipe should make one suggested portion.
         7. Format the output as a JSON array. Each element should have:
             - "meal_type": one of "breakfast", "lunch", "dinner"
             - "recipe": an object with:
@@ -79,8 +79,7 @@ class MealPlanGeneratorService
     prepared_ingredients = meal_plan_data.map do |meal|
       meal["recipe"]["ingredients"].map do |ing|
         service = NutritionService.new
-        ingredient = service.find_or_create_ingredient(ing["name"].strip.downcase, ing["quantity"], ing["unit"])
-        { ingredient: ingredient, quantity: ing["quantity"], unit: ing["unit"] }
+        service.recipe_ingredient_attributes(ing["name"], ing["quantity"], ing["unit"])
       end
     end
 
@@ -90,7 +89,9 @@ class MealPlanGeneratorService
         recipe_data = meal["recipe"]
         recipe = @user.recipes.create!(title: recipe_data["title"], instructions: recipe_data["instructions"])
         prepared_ingredients[index].each do |attributes|
-          recipe.recipe_ingredients.find_or_create_by!(attributes)
+          recipe.recipe_ingredients.find_or_create_by!(attributes.except(:nutrition_measure)) do |line|
+            line.nutrition_measure = attributes[:nutrition_measure]
+          end
         end
         MealPlanRecipe.create!(meal_plan: meal_plan, recipe: recipe, meal_type: meal["meal_type"].downcase)
       end

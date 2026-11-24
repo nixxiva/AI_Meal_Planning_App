@@ -65,8 +65,9 @@ class RecipePersistenceTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "valid AI breakfast lunch and dinner save correctly" do
-    with_providers(valid_plan.to_json) do
+  test "AI breakfast lunch and dinner save with a prompt for one portion per recipe" do
+    prompts = []
+    with_providers(valid_plan.to_json, capture: ->(prompt) { prompts << prompt }) do
       assert_difference "MealPlan.count", 1 do
         post generation_path, headers: auth_headers, as: :json
         assert_response :success
@@ -76,6 +77,7 @@ class RecipePersistenceTest < ActionDispatch::IntegrationTest
     assert_equal %w[breakfast dinner lunch], plan.meal_plan_recipes.map(&:meal_type).sort
     assert_equal 3, plan.recipes.count
     assert plan.recipes.all? { |recipe| recipe.recipe_ingredients.count == 1 }
+    assert_includes prompts.sole, "Each recipe should make one suggested portion."
   end
 
   test "generation with a saved recipe title leaves the original recipe and diary alone" do
@@ -140,6 +142,47 @@ class RecipePersistenceTest < ActionDispatch::IntegrationTest
     end
   end
 
+  {
+    "empty ingredient list" => { ingredients: [] },
+    "missing ingredient list" => { ingredients: nil },
+    "blank title" => { title: "   " },
+    "missing instructions" => { instructions: nil },
+    "non-array ingredient list" => { ingredients: { name: "oats", quantity: 30, unit: "g" } },
+    "malformed later row" => { ingredients: [ { name: "oats", quantity: 30, unit: "g" }, "more oats" ] },
+    "invalid later name" => { ingredients: [ { name: "oats", quantity: 30, unit: "g" }, { name: "", quantity: 10, unit: "g" } ] },
+    "invalid later quantity" => { ingredients: [ { name: "oats", quantity: 30, unit: "g" }, { name: "rice", quantity: -1, unit: "g" } ] },
+    "invalid later unit" => { ingredients: [ { name: "oats", quantity: 30, unit: "g" }, { name: "rice", quantity: 10, unit: " " } ] }
+  }.each do |scenario, invalid_fields|
+    test "adjustment rejects #{scenario} before nutrition lookup or writes" do
+      valid_ingredient = { name: "oats", quantity: 30, unit: "g" }
+      payload = { title: "New", instructions: "Cook", ingredients: [ valid_ingredient ] }.merge(invalid_fields)
+      nutrition = NutritionService.new
+      lookups = []
+      nutrients = { "foods" => [ { "serving_weight_grams" => 30, "nf_calories" => 30, "nf_protein" => 0,
+        "nf_total_fat" => 0, "nf_total_carbohydrate" => 0 } ] }
+      simulate_lookup = ->(name, *, **) do
+        lookups << name
+        nutrients
+      end
+      ai = Object.new
+      ai.define_singleton_method(:generate_meal_plan) { |_| payload.to_json }
+
+      OpenaiService.stub(:new, ai) do
+        nutrition.stub(:fetch_nutrition_data, simulate_lookup) do
+          NutritionService.stub(:new, nutrition) do
+            assert_no_difference [ "Recipe.count", "RecipeIngredient.count", "Ingredient.count" ] do
+              post "/api/v1/recipes/#{@recipe.id}/adjust", params: { target_protein: 0 }, headers: auth_headers, as: :json
+            end
+          end
+        end
+      end
+
+      assert_response :unprocessable_entity
+      assert_equal "AI returned an invalid recipe", response.parsed_body.fetch("message")
+      assert_empty lookups
+    end
+  end
+
   test "a later adjustment write failure leaves no partial adjusted recipe" do
     output = { title: "New", instructions: "Cook", ingredients: [ { name: "rice", quantity: 30, unit: "g" }, { name: "rice", quantity: 999, unit: "g" } ] }
     assert_no_difference [ "Recipe.count", "RecipeIngredient.count" ] do
@@ -162,6 +205,7 @@ class RecipePersistenceTest < ActionDispatch::IntegrationTest
       assert_response :success
     end
     assert_includes captured_prompt, "Health Goal: Maintain weight"
+    assert_includes captured_prompt, "Keep portions reasonable for a single serving."
   end
 
   {

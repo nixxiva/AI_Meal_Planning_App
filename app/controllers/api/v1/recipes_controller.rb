@@ -87,6 +87,8 @@ class Api::V1::RecipesController < ApplicationController
       result[:data][:target_status] = adjustment_target_status(target_nutrition, result[:data])
     end
     render json: result
+  rescue RecipeAdjustmentService::InvalidRecipe
+    render json: { status: "error", message: "AI returned an invalid recipe" }, status: :unprocessable_entity
   rescue => e
     Rails.logger.error "Recipe adjustment error: #{e.message}"
     render json: { status: "error", message: "Failed to adjust recipe" }, status: :unprocessable_entity
@@ -160,13 +162,27 @@ class Api::V1::RecipesController < ApplicationController
   end
 
   def prepare_recipe_ingredients
-    return [] if recipe_ingredients_params.empty?
+    submitted = recipe_ingredients_params
+    return [] if submitted.empty?
 
-    nutrition_service = NutritionService.new
-    recipe_ingredients_params.map do |ingredient_data|
-      ingredient = nutrition_service.find_or_create_ingredient(ingredient_data[:ingredient_name], ingredient_data[:quantity], ingredient_data[:unit])
-      { ingredient: ingredient, quantity: ingredient_data[:quantity], unit: ingredient_data[:unit] }
+    previous_lines = if @recipe.persisted?
+      @recipe.recipe_ingredients.includes(:ingredient).group_by do |line|
+        recipe_ingredient_key(line.ingredient.ingredient_name, line.quantity, line.unit)
+      end
+    else
+      {}
     end
+    nutrition_service = NutritionService.new
+    submitted.map do |ingredient_data|
+      name, quantity, unit = ingredient_data.values_at(:ingredient_name, :quantity, :unit)
+      previous_line = previous_lines[recipe_ingredient_key(name, quantity, unit)]&.shift
+      nutrition_service.recipe_ingredient_attributes(name, quantity, unit, previous_line: previous_line)
+    end
+  end
+
+  def recipe_ingredient_key(name, quantity, unit)
+    amount = BigDecimal(quantity.to_s, exception: false) || quantity.to_s
+    [ name.to_s.strip.downcase, amount, unit.to_s.strip.downcase ]
   end
 
   def create_recipe_ingredients(ingredients)
