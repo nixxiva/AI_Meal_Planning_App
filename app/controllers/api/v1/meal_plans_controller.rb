@@ -3,7 +3,9 @@ class Api::V1::MealPlansController < ApplicationController
     include: {
       meal_plan_recipes: {
         include: {
-          recipe: { include: { recipe_ingredients: { include: :ingredient } } }
+          recipe: {
+            include: { recipe_ingredients: { except: :nutrition_measure, include: :ingredient } }
+          }
         }
       }
     }

@@ -67,6 +67,22 @@ class NutritionService
     sum_nutrition(ingredients, servings: servings)
   end
 
+  def recipe_ingredient_attributes(name, quantity, unit, previous_line: nil)
+    normalized_name = name.downcase.strip
+    measure = if previous_line
+      previous_line.nutrition_measure
+    else
+      RecipeIngredientMeasurement.resolve(normalized_name, quantity, unit, mass_grams_per_unit: get_grams_for_unit(unit))
+    end
+    ingredient = if measure
+      previous_line&.ingredient || Ingredient.find_or_create_by!(ingredient_name: normalized_name)
+    else
+      find_or_create_ingredient(name, quantity, unit)
+    end
+
+    { ingredient: ingredient, quantity: quantity, unit: unit, nutrition_measure: measure }
+  end
+
   def sum_nutrition(items, servings: 1)
     totals = TOTAL_KEYS.index_with(0)
     items.each do |item|
@@ -84,6 +100,9 @@ class NutritionService
   end
 
   def ingredient_nutrition(recipe_ingredient)
+    measure = recipe_ingredient.nutrition_measure
+    return measure.fetch("totals").symbolize_keys.merge(nutrition_available: true) if measure
+
     ingredient = recipe_ingredient.ingredient
     grams_per_unit = get_grams_for_unit(recipe_ingredient.unit)
     quantity = Float(recipe_ingredient.quantity, exception: false)

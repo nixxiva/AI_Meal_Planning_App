@@ -134,7 +134,7 @@ class MealPlanSubstitutionTest < ActionDispatch::IntegrationTest
   end
 
   def nutrition_stub
-    Object.new.tap do |service|
+    NutritionService.new.tap do |service|
       service.define_singleton_method(:find_or_create_ingredient) do |name, *_amount|
         Ingredient.find_or_create_by!(ingredient_name: name.strip.downcase) do |ingredient|
           ingredient.calories_per_gram = 1

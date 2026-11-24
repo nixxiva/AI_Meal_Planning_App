@@ -1,4 +1,6 @@
 class RecipeAdjustmentService
+  class InvalidRecipe < StandardError; end
+
   def initialize(recipe, user)
     @recipe = recipe
     @user = user
@@ -10,6 +12,7 @@ class RecipeAdjustmentService
 
     ai_response = call_ai_for_adjustment(target_nutrition, preferences)
     adjusted_recipe_data = parse_ai_response(ai_response)
+    validate_recipe!(adjusted_recipe_data)
 
     process_adjusted_recipe(adjusted_recipe_data)
   end
@@ -75,46 +78,45 @@ class RecipeAdjustmentService
     end
 
   def parse_ai_response(response)
-    return response if response.is_a?(Hash)
-
-    if response.is_a?(String)
-      JSON.parse(response)
-    else
-      {}
-    end
+    response.is_a?(String) ? JSON.parse(response) : response
   rescue JSON::ParserError
-    Rails.logger.warn("AI response could not be parsed: #{response}")
-    {}
+    raise InvalidRecipe
   end
 
-  def process_adjusted_recipe(original_recipe)
-    if original_recipe.is_a?(Hash) && original_recipe["title"]
-      adjusted_recipe_data = {
-        "title" => "Adjusted #{original_recipe["title"]}",
-        "instructions" => original_recipe["instructions"],
-        "ingredients" => original_recipe["ingredients"]
-      }
+  def validate_recipe!(recipe)
+    raise InvalidRecipe unless recipe.is_a?(Hash)
 
-      ingredients = adjusted_recipe_data["ingredients"].map do |ingredient_data|
-        ingredient = @nutrition_service.find_or_create_ingredient(ingredient_data["name"], ingredient_data["quantity"], ingredient_data["unit"])
-        { ingredient: ingredient, quantity: ingredient_data["quantity"], unit: ingredient_data["unit"] }
+    ingredients = recipe["ingredients"]
+    valid = recipe["title"].is_a?(String) && recipe["title"].present? &&
+      recipe["instructions"].is_a?(String) && recipe["instructions"].present? &&
+      ingredients.is_a?(Array) && ingredients.any? && ingredients.all? do |ingredient|
+        next false unless ingredient.is_a?(Hash)
+
+        quantity = ingredient["quantity"]
+        ingredient["name"].is_a?(String) && ingredient["name"].present? &&
+          ingredient["unit"].is_a?(String) && ingredient["unit"].present? &&
+          quantity.is_a?(Numeric) && quantity.real? && quantity.finite? && quantity.positive?
       end
 
-      Recipe.transaction do
-        new_recipe = Recipe.create!(
-          title: adjusted_recipe_data["title"],
-          instructions: adjusted_recipe_data["instructions"],
-          user: @user
-        )
+    raise InvalidRecipe unless valid
+  end
 
-        ingredients.each do |attributes|
-          new_recipe.recipe_ingredients.create!(attributes)
-        end
-        new_recipe
+  def process_adjusted_recipe(adjusted_recipe_data)
+    ingredients = adjusted_recipe_data["ingredients"].map do |ingredient_data|
+      @nutrition_service.recipe_ingredient_attributes(ingredient_data["name"], ingredient_data["quantity"], ingredient_data["unit"])
+    end
+
+    Recipe.transaction do
+      new_recipe = Recipe.create!(
+        title: "Adjusted #{adjusted_recipe_data["title"]}",
+        instructions: adjusted_recipe_data["instructions"],
+        user: @user
+      )
+
+      ingredients.each do |attributes|
+        new_recipe.recipe_ingredients.create!(attributes)
       end
-    else
-      Rails.logger.error "Invalid AI response format"
-      nil
+      new_recipe
     end
   end
 end
