@@ -54,7 +54,10 @@ class MealPlanGeneratorService
                     - "quantity": number
                     - "unit": string
 
-      Please respond with only valid JSON. Do not include markdown, code blocks, or extra text.
+      Example of one entry in the array:
+      {"meal_type":"breakfast","recipe":{"title":"Oat bowl","instructions":"Cook oats in water.","ingredients":[{"name":"oats","quantity":40,"unit":"g"},{"name":"water","quantity":200,"unit":"g"}]}}
+
+      Respond with only the JSON array. Do not include markdown, code blocks, or extra text.
     PROMPT
 
     OpenaiService.new.generate_meal_plan(prompt)

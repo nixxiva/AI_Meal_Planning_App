@@ -22,6 +22,7 @@ class MealPlanSubstitutionTest < ActionDispatch::IntegrationTest
   test "generation keeps response fields and requests one restricted suggestion per missing ingredient" do
     generate_with_substitute("Broccoli")
     assert_response :success
+    assert_equal %w[breakfast dinner lunch], response.parsed_body.fetch("meal_plan_recipes").pluck("meal_type").sort
     assert_equal [ "carrot" ], @suggestion_calls
     assert_equal 1, @substitution_prompts.length
     assert_includes @substitution_prompts.first, "Peanut"
@@ -38,6 +39,25 @@ class MealPlanSubstitutionTest < ActionDispatch::IntegrationTest
         assert_equal false, ingredient.fetch("from_pantry")
         assert_equal "Broccoli", ingredient.fetch("substitute")
       end
+    end
+  end
+
+  test "viewing a saved plan returns named meals and nested ingredients without provider work" do
+    generate_with_substitute("Broccoli")
+    assert_response :success
+    plan = response.parsed_body
+    path = "/api/v1/users/#{@user.id}/meal_plans"
+    no_provider = ->(*) { flunk "Reading a saved plan should not request suggestions" }
+    RecipeSuggestionService.stub(:new, no_provider) do
+      get "#{path}/#{plan.fetch("id")}", headers: auth_headers
+      assert_response :success
+      shown_meals = response.parsed_body.fetch("data").fetch("meal_plan_recipes")
+
+      get path, headers: auth_headers
+      assert_response :success
+      assert_equal shown_meals, response.parsed_body.sole.fetch("meal_plan_recipes")
+      assert_equal %w[breakfast dinner lunch], shown_meals.pluck("meal_type").sort
+      assert_equal %w[carrot rice], shown_meals.first.dig("recipe", "recipe_ingredients").map { |row| row.dig("ingredient", "ingredient_name") }.sort
     end
   end
 

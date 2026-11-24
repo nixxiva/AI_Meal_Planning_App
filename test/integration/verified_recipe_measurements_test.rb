@@ -93,6 +93,11 @@ class VerifiedRecipeMeasurementsTest < ActionDispatch::IntegrationTest
     get plans_path, headers: @headers
     assert_response :success
     assert_no_snapshot(response.parsed_body.sole.fetch("meal_plan_recipes"))
+
+    get "#{plans_path}/#{plan.id}", headers: @headers
+    assert_response :success
+    assert_no_snapshot(response.parsed_body.fetch("data").fetch("meal_plan_recipes"))
+
     with_reply({ title: "Adjusted", instructions: "Cook", ingredients: [ ingredient_row ] }) do
       post "/api/v1/recipes/#{recipe.id}/adjust", params: { target_calories: 143 }, headers: @headers, as: :json
       assert_response :success

@@ -68,6 +68,7 @@ class AccountOwnershipTest < ActionDispatch::IntegrationTest
         params: { meal_plan: { start_date: Date.current, end_date: Date.current } },
         headers: auth_headers(@owner), as: :json
       assert_response :success
+      assert_equal [], response.parsed_body.dig("data", "meal_plan_recipes")
     end
 
     get "/api/v1/users/#{@owner.id}/meal_plans", headers: auth_headers(@owner), as: :json

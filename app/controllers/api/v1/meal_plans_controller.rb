@@ -25,7 +25,7 @@ class Api::V1::MealPlansController < ApplicationController
     meal_plan = @user.meal_plans.build(meal_plan_params)
 
     if meal_plan.save
-      render json: { message: "Meal plan created successfully", data: meal_plan }, status: :ok
+      render json: { message: "Meal plan created successfully", data: meal_plan.as_json(PLAN_JSON) }, status: :ok
     else
       render json: { errors: meal_plan.errors.full_messages }, status: :unprocessable_entity
     end
@@ -36,7 +36,7 @@ class Api::V1::MealPlansController < ApplicationController
     meal_plan = @user.meal_plans.find_by(id: params[:id])
 
     if meal_plan
-      render json: { status: "success", data: meal_plan }, status: :ok
+      render json: { status: "success", data: meal_plan.as_json(PLAN_JSON) }, status: :ok
     else
       render json: { error: "Meal plan doesn't exist" }, status: :not_found
     end
