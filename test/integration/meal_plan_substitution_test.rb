@@ -61,6 +61,67 @@ class MealPlanSubstitutionTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test "pantry amounts guide the whole plan without changing inventory" do
+    @user.pantry_items.create!(name: "Rice", quantity: 0.5, unit: "cup", ingredient: @rice)
+    @user.pantry_items.create!(name: "Lentils", unit: "g", ingredient: @rice)
+    @user.pantry_items.create!(name: "Beans", quantity: 2, ingredient: @rice)
+    @user.pantry_items.create!(name: "Spinach", quantity: 2, unit: "handfuls", ingredient: @rice)
+    @user.pantry_items.create!(name: "Onions", quantity: -1, unit: "pieces", ingredient: @rice)
+    @user.pantry_items.create!(name: "Pasta", quantity: Float::INFINITY, unit: "g", ingredient: @rice)
+    inventory = @user.pantry_items.order(:id).map(&:attributes)
+
+    generate_with_substitute("Broccoli")
+    assert_response :success
+
+    guidance = pantry_guidance
+    assert_includes guidance, { "name" => "Rice", "quantity" => 100, "unit" => "g" }
+    assert_includes guidance, { "name" => "Rice", "quantity" => 0.5, "unit" => "cup" }
+    %w[Lentils Beans Spinach Onions Pasta].each do |name|
+      assert_includes guidance, { "name" => name, "quantity" => nil, "unit" => nil }
+    end
+    assert_match(/guidance only/, @generation_prompts.sole)
+    assert_match(/across all meals/, @generation_prompts.sole)
+
+    rice_lines = response_ingredients.select { |row| row.dig("ingredient", "ingredient_name") == "rice" }
+    assert_equal 150, rice_lines.sum { |row| row.fetch("quantity").to_f }
+    assert rice_lines.all? { |row| row.fetch("from_pantry") && row.fetch("substitute").nil? }
+    assert_equal [ "carrot" ], @suggestion_calls
+    assert_equal inventory, @user.pantry_items.reload.order(:id).map(&:attributes)
+  end
+
+  test "empty pantry is sent without guessed stock" do
+    @user.pantry_items.delete_all
+
+    generate_with_substitute("Broccoli")
+    assert_response :success
+    assert_empty pantry_guidance
+    assert response_ingredients.none? { |row| row.fetch("from_pantry") }
+    assert_empty @user.pantry_items.reload
+  end
+
+  test "zero stock reaches the planner as out of stock while missing amounts stay unknown" do
+    stock = @user.pantry_items.sole
+    patch "/api/v1/users/#{@user.id}/pantry_items/#{stock.id}",
+      params: { pantry_item: { quantity: 0 } }, headers: auth_headers, as: :json
+    assert_response :ok
+    assert_equal 0.0, stock.reload.quantity
+    @user.pantry_items.create!(name: "Lentils", unit: "g", ingredient: @rice)
+    @user.pantry_items.create!(name: "Beans", quantity: 0, ingredient: @rice)
+
+    generate_with_substitute("Broccoli")
+    assert_response :success
+    guidance = pantry_guidance
+    assert_includes guidance, { "name" => "Rice", "quantity" => 0, "unit" => "g" }
+    assert_includes guidance, { "name" => "Beans", "quantity" => 0, "unit" => nil }
+    assert_includes guidance, { "name" => "Lentils", "quantity" => nil, "unit" => nil }
+    assert_match(/zero quantity.*out of stock/, @generation_prompts.sole)
+    assert_equal 0.0, stock.reload.quantity
+    assert_equal [ "carrot" ], @suggestion_calls
+    rice_lines = response_ingredients.select { |row| row.dig("ingredient", "ingredient_name") == "rice" }
+    assert_equal 3, rice_lines.size
+    assert rice_lines.all? { |row| row.fetch("from_pantry") && row.fetch("substitute").nil? }
+  end
+
   test "known allergy and disliked suggestions are withheld after normalizing case and whitespace" do
     [ " PEANUT ", " celery " ].each do |suggestion|
       generate_with_substitute(suggestion)
@@ -95,12 +156,20 @@ class MealPlanSubstitutionTest < ActionDispatch::IntegrationTest
 
   private
 
+  def pantry_guidance
+    line = @generation_prompts.sole.lines.find { |entry| entry.start_with?("Available pantry items: ") }
+    assert_match(/\AAvailable pantry items: \[/, line, "The prompt should send pantry names and amounts as data")
+    JSON.parse(line.delete_prefix("Available pantry items: "))
+  end
+
   def generate_with_substitute(suggestion)
+    generation_prompts = @generation_prompts = []
     @substitution_prompts = []
     @suggestion_calls = []
     ai = Object.new
-    ai.define_singleton_method(:generate_meal_plan) do |prompt|
+    ai.define_singleton_method(:generate_meal_plan) do |prompt, **|
       if prompt.include?("Create a 1-day meal plan")
+        generation_prompts << prompt
         %w[breakfast lunch dinner].map do |meal|
           { "meal_type" => meal, "recipe" => { "title" => "#{meal} bowl", "instructions" => "Cook",
             "ingredients" => [
